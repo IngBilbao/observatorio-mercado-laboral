@@ -35,16 +35,12 @@
                              │
                              ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  EXCEL  (observatorio_staging.xlsx — Power Query)                 │
-│  Datos_Base · Resumen_Skills · Análisis_Salarial ·                │
-│  Predicciones · Skill_Gap · Dashboard_Excel                       │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  POWER BI  (observatorio.pbix — esquema estrella)                 │
-│  Resumen Ejecutivo · Skills · Salarios · Mapa · Predicciones ·    │
-│  Perfiles (Clusters)                                              │
+│  POWER BI  (observatorio.pbix)                                    │
+│  ETL: Power Query (M) — modelo estrella sobre CSVs del pipeline   │
+│  Modelo: Fact_Ofertas, Fact_Skills_Oferta, Fact_Predicciones,     │
+│          Fact_ModeloSalarios + 5 dimensiones                      │
+│  Páginas: Resumen · Skills · Salarios · Mapa · Predicciones ·     │
+│           Perfiles (Clusters)                                     │
 └────────────────────────────┬─────────────────────────────────────┘
                              │
                              ▼
@@ -79,9 +75,8 @@ py python/04_clustering.py
 py python/05_series_tiempo.py
 py python/06_regresion_salarios.py
 
-# 5. Abrir Excel y refrescar Power Query (excel/observatorio_staging.xlsx)
-# 6. Abrir Power BI y refrescar (powerbi/observatorio.pbix)
-# 7. Importar flujos a Power Automate (power_automate/*.json)
+# 5. Construir Power BI siguiendo powerbi/README.md (ETL hecho en Power Query)
+# 6. Importar flujos a Power Automate (power_automate/*.json)
 ```
 
 ---
@@ -110,11 +105,12 @@ observatorio-mercado-laboral/
 │   ├── 05_series_tiempo.py
 │   └── 06_regresion_salarios.py
 │
-├── excel/
-│   └── observatorio_staging.xlsx
-│
 ├── powerbi/
-│   └── observatorio.pbix
+│   ├── README.md                 ← guía paso a paso de construcción
+│   ├── observatorio.pbix         ← (se crea siguiendo la guía)
+│   ├── theme/                    ← tema visual Bilbao Analytics
+│   ├── etl/                      ← 8 scripts Power Query (.pq)
+│   └── dax/                      ← 5 archivos de medidas (.dax)
 │
 ├── power_automate/
 │   ├── README.md                 ← guía para crear/importar flujos
@@ -161,15 +157,14 @@ Tipografía: **Segoe UI** (Power BI), **Calibri** (Excel).
 
 | Fase                              | Estado  |
 |-----------------------------------|---------|
-| Scaffold del repositorio          | ✅       |
-| Generador de datos sintéticos     | ✅       |
-| Pipeline Python (esqueletos)      | ✅       |
-| Pipeline Python (implementación)  | 🚧       |
-| Excel + Power Query               | ⏳       |
-| Dashboard Power BI                | ⏳       |
-| Flujos Power Automate             | ⏳       |
-| Integración Adzuna + Remotive     | ⏳       |
-| Sustitución datos reales (Kaggle) | ⏳       |
+| Scaffold del repositorio                       | ✅       |
+| Generador de datos sintéticos                  | ✅       |
+| Pipeline Python end-to-end (implementación)    | ✅       |
+| ETL Power Query + medidas DAX + tema visual    | ✅       |
+| Dashboard Power BI (`.pbix` construido)        | 🚧 *(siguiendo `powerbi/README.md`)* |
+| Flujos Power Automate                          | ⏳       |
+| Integración Adzuna + Remotive                  | ⏳       |
+| Sustitución datos reales (Kaggle)              | ⏳       |
 
 ---
 

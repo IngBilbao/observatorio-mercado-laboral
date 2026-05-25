@@ -1,0 +1,63 @@
+// ============================================================================
+// MEDIDAS — Alertas (para Power Automate y para visuales condicionales)
+// ----------------------------------------------------------------------------
+// Carpeta sugerida: "04 · Alertas"
+//
+// Estas medidas son las que el flujo de Power Automate evaluara para decidir
+// si emite una alerta. Tambien pueden alimentar visuales tipo semaforo.
+// ============================================================================
+
+// Umbral configurable: cambiar aqui si se desea otra sensibilidad
+Umbral Alerta MoM Skill := 0.30
+
+// % cambio MoM de las ofertas que mencionan la skill seleccionada
+Var MoM Skill =
+VAR Actual =
+    CALCULATE (
+        COUNTROWS ( Fact_Skills_Oferta ),
+        DATESBETWEEN (
+            Dim_Calendario[Fecha],
+            EOMONTH ( MAX ( Dim_Calendario[Fecha] ), -1 ) + 1,
+            MAX ( Dim_Calendario[Fecha] )
+        )
+    )
+VAR Anterior =
+    CALCULATE (
+        COUNTROWS ( Fact_Skills_Oferta ),
+        DATESBETWEEN (
+            Dim_Calendario[Fecha],
+            EOMONTH ( MAX ( Dim_Calendario[Fecha] ), -2 ) + 1,
+            EOMONTH ( MAX ( Dim_Calendario[Fecha] ), -1 )
+        )
+    )
+RETURN
+    DIVIDE ( Actual - Anterior, Anterior )
+
+// Bandera de alerta — usar en el flujo de Power Automate
+Flag Alerta MoM =
+IF (
+    ABS ( [Var MoM Skill] ) >= [Umbral Alerta MoM Skill],
+    1,
+    0
+)
+
+// Texto descriptivo de la alerta (para body del email)
+Mensaje Alerta MoM =
+VAR Cambio = [Var MoM Skill]
+VAR Skill  = SELECTEDVALUE ( Dim_Skills[skill] )
+RETURN
+    SWITCH (
+        TRUE (),
+        Cambio >=  0.30, FORMAT ( Cambio, "0.0%" ) & " ↑ en " & Skill & " — interes al alza",
+        Cambio <= -0.30, FORMAT ( Cambio, "0.0%" ) & " ↓ en " & Skill & " — demanda en caida",
+        "Sin cambios significativos"
+    )
+
+// Conteo de skills que disparan alerta en el periodo actual
+Skills en Alerta =
+COUNTROWS (
+    FILTER (
+        VALUES ( Dim_Skills[skill] ),
+        ABS ( [Var MoM Skill] ) >= [Umbral Alerta MoM Skill]
+    )
+)

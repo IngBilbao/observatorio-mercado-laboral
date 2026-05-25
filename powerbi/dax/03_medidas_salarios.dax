@@ -1,0 +1,48 @@
+// ============================================================================
+// MEDIDAS — Inteligencia salarial
+// ----------------------------------------------------------------------------
+// Carpeta sugerida: "02 · Salarios"
+// ============================================================================
+
+// ─── Predicciones del modelo de regresion ───────────────────────────────────
+Salario Predicho USD =
+AVERAGE ( Fact_ModeloSalarios[salario_predicho_usd] )
+
+Residuo Promedio USD =
+AVERAGE ( Fact_ModeloSalarios[residuo_usd] )
+
+Residuo Pct Promedio =
+AVERAGE ( Fact_ModeloSalarios[residuo_pct] )
+
+// Indica si la oferta esta sobre/infravalorada vs lo predicho
+Es Subpagada =
+VAR Resid = SELECTEDVALUE ( Fact_ModeloSalarios[residuo_pct] )
+RETURN
+    SWITCH (
+        TRUE (),
+        Resid < -15, "Subpagada (-15%)",
+        Resid >  15, "Sobrepagada (+15%)",
+        "En rango"
+    )
+
+
+// ─── Brecha salarial por dimensiones ────────────────────────────────────────
+Brecha Salarial Senior vs Junior =
+VAR SalSenior = CALCULATE ( [Salario Mediano USD], Fact_Ofertas[nivel_experiencia] = "Senior" )
+VAR SalJunior = CALCULATE ( [Salario Mediano USD], Fact_Ofertas[nivel_experiencia] = "Junior" )
+RETURN DIVIDE ( SalSenior - SalJunior, SalJunior )
+
+Brecha Salarial Remoto vs Presencial =
+VAR SalRemoto    = CALCULATE ( [Salario Mediano USD], Fact_Ofertas[modalidad] = "Remoto" )
+VAR SalPresencial= CALCULATE ( [Salario Mediano USD], Fact_Ofertas[modalidad] = "Presencial" )
+RETURN DIVIDE ( SalRemoto - SalPresencial, SalPresencial )
+
+
+// ─── Impacto de feature del modelo de regresion ─────────────────────────────
+Impacto Feature Pct =
+SUM ( Fact_Coef_Salarios[impacto_pct] )
+
+// Para colorear barras: verde si positivo, rojo si negativo
+Color Impacto =
+VAR Val = SUM ( Fact_Coef_Salarios[impacto_pct] )
+RETURN IF ( Val >= 0, "#00E396", "#FF4D6D" )

@@ -1,0 +1,81 @@
+// ============================================================================
+// MEDIDAS — Skills
+// ----------------------------------------------------------------------------
+// Carpeta sugerida: "01 · Skills"
+// Estas medidas trabajan sobre Fact_Skills_Oferta (tabla bridge) y Dim_Skills.
+// ============================================================================
+
+// ─── Frecuencia ──────────────────────────────────────────────────────────────
+Ofertas con Skill =
+COUNTROWS ( Fact_Skills_Oferta )
+
+Pct Ofertas con Skill =
+DIVIDE ( [Ofertas con Skill], [Total Ofertas] )
+
+Pct Ofertas con Skill (vs todas) =
+VAR TotalGlobal = CALCULATE ( COUNTROWS ( Fact_Ofertas ), ALL ( Fact_Ofertas ) )
+RETURN DIVIDE ( DISTINCTCOUNT ( Fact_Skills_Oferta[oferta_id] ), TotalGlobal )
+
+
+// ─── Ranking ─────────────────────────────────────────────────────────────────
+Rank Skill =
+RANKX (
+    ALL ( Dim_Skills[skill] ),
+    [Ofertas con Skill],
+    ,
+    DESC,
+    DENSE
+)
+
+Top 10 Skill Flag =
+IF ( [Rank Skill] <= 10, 1, 0 )
+
+
+// ─── Salario asociado a la skill ────────────────────────────────────────────
+Salario Mediano con Skill =
+CALCULATE (
+    [Salario Mediano USD],
+    USERELATIONSHIP ( Fact_Skills_Oferta[oferta_id], Fact_Ofertas[oferta_id] )
+)
+
+Salario Premium por Skill =
+VAR SalarioConSkill = [Salario Mediano con Skill]
+VAR SalarioGlobal   = CALCULATE ( [Salario Mediano USD], ALL ( Fact_Skills_Oferta ) )
+RETURN DIVIDE ( SalarioConSkill - SalarioGlobal, SalarioGlobal )
+
+
+// ─── Top skill del periodo (medida dinamica) ────────────────────────────────
+Top Skill del Mes =
+VAR TopSkill =
+    TOPN (
+        1,
+        SUMMARIZE (
+            Fact_Skills_Oferta,
+            Dim_Skills[skill],
+            "Cnt", COUNTROWS ( Fact_Skills_Oferta )
+        ),
+        [Cnt], DESC
+    )
+RETURN
+    CONCATENATEX ( TopSkill, Dim_Skills[skill] )
+
+
+// ─── Skills emergentes vs decrecientes (uso de Fact_Predicciones) ───────────
+Forecast Promedio Skill =
+AVERAGE ( Fact_Predicciones[prediccion] )
+
+Crecimiento Esperado Skill =
+VAR UltimoHistorico =
+    CALCULATE (
+        [Forecast Promedio Skill],
+        Fact_Predicciones[historico] = TRUE,
+        LASTDATE ( Fact_Predicciones[fecha] )
+    )
+VAR UltimoForecast =
+    CALCULATE (
+        [Forecast Promedio Skill],
+        Fact_Predicciones[historico] = FALSE,
+        LASTDATE ( Fact_Predicciones[fecha] )
+    )
+RETURN
+    DIVIDE ( UltimoForecast - UltimoHistorico, UltimoHistorico )

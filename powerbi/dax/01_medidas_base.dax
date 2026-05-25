@@ -1,0 +1,78 @@
+// ============================================================================
+// MEDIDAS BASE — KPIs principales
+// ----------------------------------------------------------------------------
+// Crear en Power BI Desktop dentro de una tabla "_Medidas" (recomendado: crear
+// una tabla vacia con "Especificar datos" para almacenar todas las medidas).
+//
+// Categoria sugerida (Carpeta de visualizacion): "00 · KPIs"
+// ============================================================================
+
+// ─── Conteo ──────────────────────────────────────────────────────────────────
+Total Ofertas =
+COUNTROWS ( Fact_Ofertas )
+
+Total Ofertas Ultimo Mes =
+CALCULATE (
+    [Total Ofertas],
+    Dim_Calendario[Fecha] >= EOMONTH ( MAX ( Dim_Calendario[Fecha] ), -1 ) + 1
+)
+
+Total Ofertas Mes Anterior =
+CALCULATE (
+    [Total Ofertas],
+    DATEADD ( Dim_Calendario[Fecha], -1, MONTH )
+)
+
+Var MoM Ofertas =
+VAR Actual = [Total Ofertas]
+VAR Anterior = [Total Ofertas Mes Anterior]
+RETURN
+    DIVIDE ( Actual - Anterior, Anterior )
+
+
+// ─── Salario ─────────────────────────────────────────────────────────────────
+Salario Promedio USD =
+AVERAGE ( Fact_Ofertas[salario_anual_usd] )
+
+Salario Mediano USD =
+MEDIAN ( Fact_Ofertas[salario_anual_usd] )
+
+Salario P10 USD =
+PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.10 )
+
+Salario P90 USD =
+PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.90 )
+
+Salario Maximo USD =
+MAX ( Fact_Ofertas[salario_anual_usd] )
+
+Salario Minimo USD =
+MIN ( Fact_Ofertas[salario_anual_usd] )
+
+
+// ─── Modalidad / Distribucion ───────────────────────────────────────────────
+Pct Remoto =
+DIVIDE (
+    CALCULATE ( [Total Ofertas], Fact_Ofertas[modalidad] = "Remoto" ),
+    [Total Ofertas]
+)
+
+Pct Hibrido =
+DIVIDE (
+    CALCULATE ( [Total Ofertas], Fact_Ofertas[modalidad] = "Hibrido" ),
+    [Total Ofertas]
+)
+
+Pct Presencial =
+DIVIDE (
+    CALCULATE ( [Total Ofertas], Fact_Ofertas[modalidad] = "Presencial" ),
+    [Total Ofertas]
+)
+
+
+// ─── Experiencia ─────────────────────────────────────────────────────────────
+Anios Exp Promedio =
+AVERAGE ( Fact_Ofertas[anios_experiencia] )
+
+Skills Promedio por Oferta =
+AVERAGE ( Fact_Ofertas[n_skills] )

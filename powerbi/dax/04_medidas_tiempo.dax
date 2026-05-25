@@ -1,0 +1,47 @@
+// ============================================================================
+// MEDIDAS — Time intelligence
+// ----------------------------------------------------------------------------
+// Carpeta sugerida: "03 · Tiempo"
+// Requiere que Dim_Calendario este marcada como tabla de fechas.
+// ============================================================================
+
+Ofertas YTD =
+CALCULATE ( [Total Ofertas], DATESYTD ( Dim_Calendario[Fecha] ) )
+
+Ofertas Año Anterior =
+CALCULATE ( [Total Ofertas], SAMEPERIODLASTYEAR ( Dim_Calendario[Fecha] ) )
+
+Var YoY Ofertas =
+VAR Actual = [Total Ofertas]
+VAR Anterior = [Ofertas Año Anterior]
+RETURN DIVIDE ( Actual - Anterior, Anterior )
+
+Promedio Movil 3M Ofertas =
+AVERAGEX (
+    DATESINPERIOD ( Dim_Calendario[Fecha], MAX ( Dim_Calendario[Fecha] ), -3, MONTH ),
+    [Total Ofertas]
+)
+
+Promedio Movil 6M Salario =
+AVERAGEX (
+    DATESINPERIOD ( Dim_Calendario[Fecha], MAX ( Dim_Calendario[Fecha] ), -6, MONTH ),
+    [Salario Mediano USD]
+)
+
+
+// ─── Forecast (de Fact_Predicciones) ────────────────────────────────────────
+Prediccion =
+SUM ( Fact_Predicciones[prediccion] )
+
+Banda Inferior =
+SUM ( Fact_Predicciones[banda_inferior] )
+
+Banda Superior =
+SUM ( Fact_Predicciones[banda_superior] )
+
+// Solo mostrar la prediccion en periodos futuros (forecast)
+Forecast Futuro =
+CALCULATE ( [Prediccion], Fact_Predicciones[historico] = FALSE )
+
+Historico =
+CALCULATE ( [Prediccion], Fact_Predicciones[historico] = TRUE )
