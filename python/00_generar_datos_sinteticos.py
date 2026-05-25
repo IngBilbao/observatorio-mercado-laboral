@@ -78,24 +78,28 @@ SKILLS_POR_ROL = {
                            "Python": 0.30, "SAS": 0.15, "SPSS": 0.10},
 }
 
-# Factor temporal (tendencia): multiplica la prob. de la skill según mes_offset (0=más antiguo, 23=hoy)
-# Valores positivos = skill al alza; negativos = a la baja.
+# Factor temporal (tendencia): ajuste aditivo a la prob. base por mes_offset.
+# 0 = mes más antiguo, MESES_HISTORICO-1 = mes más reciente.
+# Se aplica SOLO a skills que ya son típicas del rol (presentes en SKILLS_POR_ROL[rol]).
+# Magnitudes calibradas: en 24 meses el ajuste total no supera ±0.30 (es decir,
+# una skill puede crecer/decrecer máx ~30 puntos porcentuales en 2 años).
 TENDENCIA_MENSUAL = {
-    "Python":          +0.015,
-    "Power BI":        +0.020,
-    "dbt":             +0.030,
-    "Snowflake":       +0.025,
-    "Databricks":      +0.025,
-    "Power Automate":  +0.018,
-    "Deep Learning":   +0.015,
-    "NLP":             +0.020,
-    "SAS":             -0.025,
-    "SPSS":            -0.020,
-    "Hadoop":          -0.018,
-    "R":               -0.010,
-    "VBA":             -0.008,
-    "Tableau":         -0.005,
+    "Python":          +0.006,
+    "Power BI":        +0.008,
+    "dbt":             +0.012,
+    "Snowflake":       +0.010,
+    "Databricks":      +0.010,
+    "Power Automate":  +0.007,
+    "Deep Learning":   +0.005,
+    "NLP":             +0.006,
+    "SAS":             -0.010,
+    "SPSS":            -0.008,
+    "Hadoop":          -0.008,
+    "R":               -0.004,
+    "VBA":             -0.003,
+    "Tableau":         -0.002,
 }
+PROB_SKILL_FUERA_DE_ROL = 0.025  # spillover bajo para skills no típicas del rol
 
 UBICACIONES = [
     # (ciudad, país, código_país, lat, lon, factor_salario)
@@ -186,13 +190,18 @@ def _generar_oferta(idx: int) -> dict:
     fecha = _muestrear_fechas(1)[0]
     mes_off = _mes_offset(fecha)
 
-    # Skills: probabilidad base por rol + ajuste temporal
+    # Skills: probabilidad base por rol + ajuste temporal (solo si la skill es típica del rol)
     skills_seleccionadas = []
     probs_rol = SKILLS_POR_ROL.get(rol, {})
     for skill in SKILLS_CATALOG.keys():
-        p_base = probs_rol.get(skill, 0.04)  # 4% de prob. para skills no típicas del rol
-        ajuste = TENDENCIA_MENSUAL.get(skill, 0.0) * mes_off
-        p_final = max(0.0, min(1.0, p_base + ajuste))
+        if skill in probs_rol:
+            p_base = probs_rol[skill]
+            ajuste = TENDENCIA_MENSUAL.get(skill, 0.0) * mes_off
+        else:
+            # Skill no típica del rol: prob. constante baja, sin tendencia.
+            p_base = PROB_SKILL_FUERA_DE_ROL
+            ajuste = 0.0
+        p_final = max(0.0, min(0.97, p_base + ajuste))
         if random.random() < p_final:
             skills_seleccionadas.append(skill)
     # Garantizar al menos 2 skills
