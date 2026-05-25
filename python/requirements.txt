@@ -1,0 +1,29 @@
+# Core data stack
+pandas>=2.2
+numpy>=1.26
+openpyxl>=3.1
+python-dateutil>=2.9
+
+# Visualización
+matplotlib>=3.8
+seaborn>=0.13
+
+# Machine learning
+scikit-learn>=1.4
+statsmodels>=0.14
+
+# Series de tiempo
+prophet>=1.1.5
+
+# NLP
+spacy>=3.7
+nltk>=3.8
+
+# Fuentes de datos
+kaggle>=1.6
+requests>=2.31
+
+# Utilidades
+tqdm>=4.66
+python-dotenv>=1.0
+faker>=24.0
