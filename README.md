@@ -1,178 +1,235 @@
+<div align="center">
+
 # 🌌 Observatorio del Mercado Laboral en Datos & Tecnología
 
-> Proyecto integral de **Bilbao Analytics** que recolecta, procesa, analiza y presenta automáticamente información sobre la demanda de habilidades tecnológicas (Excel, Power BI, Python, SQL, etc.) en el mercado laboral, con modelos estadísticos y alertas automatizadas.
+**Pipeline integral que recolecta, procesa, predice y comunica la demanda de skills tech del mercado laboral.**
+
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![Power BI](https://img.shields.io/badge/Power_BI-F2C811?logo=powerbi&logoColor=black)](https://powerbi.microsoft.com)
+[![Power Automate](https://img.shields.io/badge/Power_Automate-0066FF?logo=powerautomate&logoColor=white)](https://powerautomate.microsoft.com)
+[![Prophet](https://img.shields.io/badge/Prophet-1.1-1A1A2E)](https://facebook.github.io/prophet/)
+[![scikit-learn](https://img.shields.io/badge/scikit--learn-1.4-F7931E?logo=scikit-learn&logoColor=white)](https://scikit-learn.org)
+[![License](https://img.shields.io/badge/license-MIT-00D4FF.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-active-00E396.svg)]()
+
+[**📑 Case Study completo →**](docs/case_study.md) · [**🏗️ Cómo construir el .pbix →**](powerbi/README.md) · [**⚡ Flujos Power Automate →**](power_automate/README.md)
+
+</div>
 
 ---
 
-## 🎯 Propósito
+## ✨ ¿Qué hace este proyecto?
 
-1. **Inteligencia de mercado:** entender en tiempo casi-real qué skills demandan los empleadores, cómo evolucionan los salarios y dónde están las oportunidades.
-2. **Portafolio profesional:** demostrar dominio end-to-end de un stack analítico moderno — Python (data science), Excel avanzado (Power Query), Power BI y Power Automate.
+Construye un **observatorio automatizado** que responde tres preguntas que importan tanto a profesionales como a empresas del sector datos:
+
+1. **¿Qué skills se demandan ahora y cuáles están en declive?** — NLP sobre descripciones de ofertas + serie histórica.
+2. **¿Cuánto vale una combinación de skills, experiencia y ubicación?** — modelo de regresión multivariable con R² = 0.93.
+3. **¿Hacia dónde va la demanda los próximos 12 meses?** — forecast Prophet con intervalos de confianza.
+
+Todo el sistema se refresca automáticamente vía Power Automate y envía reportes ejecutivos + alertas a los stakeholders.
+
+---
+
+## 📊 Vista rápida — outputs reales del pipeline
+
+<table>
+<tr>
+<td width="50%">
+
+**4 arquetipos profesionales identificados por K-means**
+
+![Clusters PCA](docs/imagenes/clusters_pca.png)
+
+| Cluster | Salario | Skills |
+|---|---:|---|
+| Data Analyst | $50K | Excel · SQL · Power BI |
+| Data Scientist | $85K | Python · ML |
+| Data Engineer | $93.5K | Python · SQL · Spark |
+| Analytics Engineer | $81K | SQL · dbt · Snowflake |
+
+</td>
+<td width="50%">
+
+**Forecast Prophet 12 meses — top skills**
+
+![Forecast](docs/imagenes/forecast_top_skills.png)
+
+Tendencias detectadas:
+- 📈 SQL, Python, Power BI: crecimiento sostenido
+- 📈 Machine Learning, scikit-learn: aceleración reciente
+- 🚨 Alertas activas: Redshift +350%, GCP +100%, BigQuery +65%
+
+</td>
+</tr>
+</table>
 
 ---
 
 ## 🏗️ Arquitectura
 
+```mermaid
+flowchart LR
+    subgraph fuentes ["📥 Fuentes"]
+        A[Sintéticos]
+        B[Adzuna API]
+        C[Kaggle]
+    end
+    subgraph pipeline ["🐍 Python ML"]
+        D[ETL + NLP]
+        E[Clustering<br/>K-means]
+        F[Forecast<br/>Prophet]
+        G[Regresión<br/>Salarios]
+    end
+    subgraph bi ["📊 Power BI"]
+        H[Power Query<br/>Star Schema]
+        I[Dashboard<br/>6 páginas]
+    end
+    subgraph auto ["⚡ Power Automate"]
+        J[Reporte<br/>Semanal]
+        K[Alertas<br/>MoM Skills]
+    end
+
+    A --> D
+    B --> D
+    C --> D
+    D --> E
+    D --> F
+    D --> G
+    E --> H
+    F --> H
+    G --> H
+    H --> I
+    I --> J
+    G --> K
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  FUENTES                                                          │
-│  • Datos sintéticos (fase 1 — bootstrap)                          │
-│  • Kaggle: Stack Overflow Survey, DS Salaries, LinkedIn postings  │
-│  • APIs: Adzuna + Remotive (ofertas reales, legales y estables)   │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  PYTHON  (data/processed/ + data/outputs/)                        │
-│  00 → datos sintéticos                                            │
-│  01 → extracción y consolidación                                  │
-│  02 → limpieza y normalización                                    │
-│  03 → NLP de skills (spaCy)                                       │
-│  04 → clustering de perfiles (K-means + PCA)                      │
-│  05 → series de tiempo (Prophet, forecast 12 meses)               │
-│  06 → regresión salarial (multilineal)                            │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  POWER BI  (observatorio.pbix)                                    │
-│  ETL: Power Query (M) — modelo estrella sobre CSVs del pipeline   │
-│  Modelo: Fact_Ofertas, Fact_Skills_Oferta, Fact_Predicciones,     │
-│          Fact_ModeloSalarios + 5 dimensiones                      │
-│  Páginas: Resumen · Skills · Salarios · Mapa · Predicciones ·     │
-│           Perfiles (Clusters)                                     │
-└────────────────────────────┬─────────────────────────────────────┘
-                             │
-                             ▼
-┌──────────────────────────────────────────────────────────────────┐
-│  POWER AUTOMATE                                                   │
-│  • Reporte semanal (lunes 8AM → refresh PBI → email con PDF)      │
-│  • Alertas de cambio en skills (umbral 30% MoM → email/push)      │
-└──────────────────────────────────────────────────────────────────┘
-```
+
+> Para detalle visual completo del flujo, ver [**case study**](docs/case_study.md#-arquitectura).
 
 ---
 
 ## 🚀 Quick Start
 
 ```powershell
-# 1. Crear entorno virtual (recomendado)
+# 1. Clonar
+git clone https://github.com/IngBilbao/observatorio-mercado-laboral.git
+cd observatorio-mercado-laboral
+
+# 2. Entorno e instalación
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# 2. Instalar dependencias
 pip install -r python/requirements.txt
 py -m spacy download en_core_web_sm
 
-# 3. Generar dataset sintético (5000 ofertas)
+# 3. Configurar credenciales Adzuna (opcional)
+cp .env.example .env
+# editar .env con tu Application ID y API Key de https://developer.adzuna.com
+
+# 4. Generar dataset sintético + ejecutar pipeline ML completo
 py python/00_generar_datos_sinteticos.py
+py python/99_pipeline.py
 
-# 4. Ejecutar el pipeline completo
-py python/01_extraccion.py
-py python/02_limpieza.py
-py python/03_nlp_skills.py
-py python/04_clustering.py
-py python/05_series_tiempo.py
-py python/06_regresion_salarios.py
+# 5. (Opcional) Incluir ofertas reales de Adzuna
+py python/99_pipeline.py --con-adzuna --adzuna-paises es gb us mx
 
-# 5. Construir Power BI siguiendo powerbi/README.md (ETL hecho en Power Query)
-# 6. Importar flujos a Power Automate (power_automate/*.json)
+# 6. Construir Power BI siguiendo powerbi/README.md
+# 7. Construir flujos Power Automate siguiendo power_automate/README.md
 ```
 
 ---
 
-## 📁 Estructura del Repositorio
+## 📁 Estructura del repositorio
 
 ```
 observatorio-mercado-laboral/
-├── README.md                     ← este archivo
-├── proyecto.md                   ← spec original
-├── .gitignore
 │
-├── data/
-│   ├── raw/                      ← datasets descargados (no versionados)
-│   ├── processed/                ← datos limpios
-│   └── outputs/                  ← outputs finales (PBI/Excel)
+├── 📑 docs/
+│   ├── case_study.md              ← caso de estudio completo (para reclutadores)
+│   ├── diccionario_datos.md       ← esquema de cada CSV
+│   ├── guia_visualizaciones.md    ← estándares visuales
+│   └── imagenes/                  ← gráficos generados por el pipeline
 │
-├── python/
-│   ├── requirements.txt
-│   ├── utils.py                  ← paths, branding, helpers compartidos
+├── 🐍 python/                     ← 11 scripts del pipeline
+│   ├── utils.py                   ← paths, paleta Bilbao Analytics, helpers
 │   ├── 00_generar_datos_sinteticos.py
-│   ├── 01_extraccion.py
-│   ├── 02_limpieza.py
-│   ├── 03_nlp_skills.py
-│   ├── 04_clustering.py
-│   ├── 05_series_tiempo.py
-│   └── 06_regresion_salarios.py
+│   ├── 01_extraccion.py           02_limpieza.py
+│   ├── 03_nlp_skills.py           04_clustering.py
+│   ├── 05_series_tiempo.py        06_regresion_salarios.py
+│   ├── 07_verificar_outputs.py    08_generar_alertas.py
+│   ├── 09_ingestar_adzuna.py      99_pipeline.py (orquestador)
+│   └── requirements.txt
 │
-├── powerbi/
-│   ├── README.md                 ← guía paso a paso de construcción
-│   ├── observatorio.pbix         ← (se crea siguiendo la guía)
-│   ├── theme/                    ← tema visual Bilbao Analytics
-│   ├── etl/                      ← 8 scripts Power Query (.pq)
-│   └── dax/                      ← 5 archivos de medidas (.dax)
+├── 📊 powerbi/
+│   ├── README.md                  ← guía paso a paso del .pbix
+│   ├── Observatorio.pbix
+│   ├── etl/                       ← 8 scripts Power Query M
+│   ├── dax/                       ← 5 archivos de medidas DAX
+│   └── theme/bilbao_analytics_theme.json
 │
-├── power_automate/
-│   ├── README.md                 ← guía para crear/importar flujos
-│   ├── flujo_reporte_semanal.json
-│   └── flujo_alertas_skills.json
+├── ⚡ power_automate/
+│   ├── README.md                  ← índice de flujos
+│   ├── CONFIGURAR_REFRESH.md      ← prereq: Gateway
+│   ├── COMO_OBTENER_IDS.md        ← obtener Dataset/Report IDs
+│   ├── flujo_01_reporte_semanal.md
+│   └── flujo_02_alertas_skills.md
 │
-├── notebooks/                    ← exploración ad-hoc
-├── assets/                       ← logos, imágenes, paleta
-└── docs/
-    ├── diccionario_datos.md
-    └── guia_visualizaciones.md
+├── 📦 data/  (gitignored)
+│   ├── raw/                       ← descargas crudas (Adzuna, Kaggle)
+│   ├── processed/                 ← datos limpios + matriz de skills
+│   └── outputs/                   ← outputs ML para Power BI
+│
+├── 🔐 .env.example                ← template para credenciales
+└── 📄 proyecto.md                 ← spec original del proyecto
 ```
 
 ---
 
-## 🧪 Modelos Estadísticos
+## 🎯 Highlights técnicos
 
-| Modelo                     | Librería                  | Propósito                                    |
-|----------------------------|---------------------------|----------------------------------------------|
-| K-means + PCA              | scikit-learn              | Segmentar arquetipos profesionales (k=4–6)   |
-| Prophet                    | prophet                   | Forecast 12 meses de demanda por skill       |
-| Regresión Lineal Múltiple  | statsmodels / sklearn     | Estimación salarial multivariable            |
-| Correlación de Pearson     | pandas + seaborn          | Skills que aparecen juntas (heatmap)         |
+| Capa | Skill demostrada |
+|---|---|
+| **Python** | OOP ligero (dataclasses), CLI argparse, dotenv para secretos, logging UTF-8 cross-platform |
+| **Data wrangling** | pandas/numpy con winsorize, unpivot, validaciones type-safe |
+| **NLP** | Matching híbrido catálogo canónico + spaCy + regex con boundaries |
+| **ML** | K-means con silueta para k óptimo, PCA 2D, regresión sobre `log(salario)`, validación 80/20 |
+| **Series tiempo** | Prophet con estacionalidad anual + intervalos 80% para 12 skills |
+| **REST APIs** | Cliente Adzuna con rate limiting, control de cuota, mapeo de schemas |
+| **Power Query M** | Esquema estrella, parámetros reutilizables, tabla calendario en M, unpivot |
+| **DAX** | Medidas con time intelligence (YTD/YoY/MoM), `USERELATIONSHIP`, formato condicional |
+| **Power BI** | Tema JSON custom, 6 páginas tipificadas, mapas, forecast con bandas |
+| **Power Automate** | Flujos por schedule + trigger de archivo, API Power BI, plantillas HTML email |
+| **Git/GitHub** | Repo público con topics, secrets fuera del repo, commits informativos |
 
----
-
-## 🎨 Identidad Visual — Bilbao Analytics
-
-Temática **universo / espacio exterior**.
-
-| Token         | Hex       | Uso                                  |
-|---------------|-----------|--------------------------------------|
-| Fondo profundo| `#0D0D1A` | Background principal Power BI        |
-| Fondo medio   | `#1A1A2E` | Tarjetas, paneles                    |
-| Azul eléctrico| `#00D4FF` | KPIs, líneas, acentos primarios      |
-| Violeta       | `#7B2FBE` | Acentos secundarios, categorías      |
-| Texto         | `#E8E8F0` | Texto principal sobre fondo oscuro   |
-
-Tipografía: **Segoe UI** (Power BI), **Calibri** (Excel).
+📋 **Lista completa con métricas en el [case study](docs/case_study.md).**
 
 ---
 
-## 📊 Estado del Proyecto
+## 📈 Métricas del último run
 
-| Fase                              | Estado  |
-|-----------------------------------|---------|
-| Scaffold del repositorio                       | ✅       |
-| Generador de datos sintéticos                  | ✅       |
-| Pipeline Python end-to-end (implementación)    | ✅       |
-| ETL Power Query + medidas DAX + tema visual    | ✅       |
-| Dashboard Power BI (`.pbix` construido)        | 🚧 *(siguiendo `powerbi/README.md`)* |
-| Flujos Power Automate                          | ⏳       |
-| Integración Adzuna + Remotive                  | ⏳       |
-| Sustitución datos reales (Kaggle)              | ⏳       |
+| Métrica | Valor |
+|---|---:|
+| Ofertas procesadas | **5,237** (sintéticas + Adzuna reales) |
+| Países cubiertos | 13 |
+| Skills monitoreadas | 35 |
+| Roles normalizados | 8 |
+| Clusters identificados | 4 (silueta = 0.229) |
+| Skills con forecast Prophet | 12 |
+| R² modelo salarial | **0.93** |
+| RMSE modelo salarial | ±$14,623 |
+| Alertas MoM detectadas | 8 |
+| Tiempo total pipeline | 0.4 min (--rapido) |
 
 ---
-
-## 👤 Autor
-
-**Bilbao Analytics** — consultoría en datos e inteligencia analítica.
-Construido como caso de estudio integral para demostrar dominio del stack moderno de análisis de datos.
 
 ## 📜 Licencia
 
-MIT — ver `LICENSE` (pendiente).
+MIT — ver [`LICENSE`](LICENSE).
+
+---
+
+<div align="center">
+
+**🌌 Construido por [Bilbao Analytics](https://github.com/IngBilbao)** · bilbao990512@gmail.com
+
+*Los datos cuentan historias. Bilbao Analytics las hace audibles.*
+
+</div>

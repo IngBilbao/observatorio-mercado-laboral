@@ -44,8 +44,8 @@ def _patron_skill(aliases: list[str]) -> re.Pattern:
 PATRONES = {skill: _patron_skill(aliases) for skill, aliases in SKILLS_CATALOG.items()}
 
 
-def detectar_skills_desde_texto(texto: str) -> set[str]:
-    if not texto or pd.isna(texto):
+def detectar_skills_desde_texto(texto) -> set[str]:
+    if texto is None or not isinstance(texto, str) or not texto or pd.isna(texto):
         return set()
     detectadas = set()
     for skill, patron in PATRONES.items():
@@ -54,8 +54,9 @@ def detectar_skills_desde_texto(texto: str) -> set[str]:
     return detectadas
 
 
-def detectar_skills_desde_lista(skills_str: str) -> set[str]:
-    if not skills_str:
+def detectar_skills_desde_lista(skills_str) -> set[str]:
+    # Defensa contra NaN/floats que pandas introduce al leer CSVs con celdas vacias
+    if skills_str is None or not isinstance(skills_str, str) or not skills_str:
         return set()
     return {s.strip() for s in skills_str.split("|") if s.strip() in SKILLS_CATALOG}
 
