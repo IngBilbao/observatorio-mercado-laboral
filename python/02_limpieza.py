@@ -19,8 +19,9 @@ import pandas as pd
 
 from utils import PATHS, load_csv, log, save_csv
 
-COLUMNAS_CRITICAS = ["oferta_id", "fecha_publicacion", "rol_normalizado",
-                     "salario_anual_usd"]
+COLUMNAS_CRITICAS = ["oferta_id", "fecha_publicacion", "rol_normalizado"]
+# Nota: salario_anual_usd ya NO es critico - aceptamos ofertas sin salario
+# (Adzuna ES/MX no siempre lo provee). El paso 06_regresion_salarios.py las filtra.
 
 
 def limpiar(df: pd.DataFrame) -> pd.DataFrame:

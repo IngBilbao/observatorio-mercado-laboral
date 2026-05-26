@@ -135,9 +135,10 @@ RETURN
 
 
 HTML P1 · Sparkline Tendencia =
-// SVG sparkline con la tendencia mensual de ofertas en los meses con datos.
-// Calcula el delta absoluto entre el primer y último mes para mostrar
-// variación global del periodo.
+// SVG sparkline mejorado: muestra el valor del ULTIMO mes con tamaño grande
+// + delta vs mes anterior (no vs primer mes, que era engañoso con datos
+// sparse). Ejes con fechas YYYY-MM al inicio y fin. Punto destacado al final
+// de la línea.
 VAR _Data =
     ADDCOLUMNS (
         FILTER ( VALUES ( Dim_Calendario[InicioMes] ), CALCULATE ( [Total Ofertas] ) > 0 ),
@@ -149,33 +150,49 @@ VAR _Min    = MINX ( _Sorted, [N] )
 VAR _Range  = _Max - _Min + 0.0001
 VAR _N      = COUNTROWS ( _Sorted ) + 0
 VAR _Width  = 280
-VAR _Height = 70
-VAR _StepX  = DIVIDE ( _Width - 10, _N - 1 )
+VAR _Height = 80
+VAR _StepX  = DIVIDE ( _Width - 20, _N - 1 )
 VAR _Points =
     CONCATENATEX (
         _Sorted,
-        FORMAT ( 5 + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
-        FORMAT ( _Height - 5 - DIVIDE ( [N] - _Min, _Range ) * ( _Height - 15 ), "0" ),
+        FORMAT ( 10 + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
+        FORMAT ( _Height - 15 - DIVIDE ( [N] - _Min, _Range ) * ( _Height - 30 ), "0" ),
         " ",
         [Idx], ASC
     )
-VAR _LastN  = MAXX ( TOPN ( 1, _Sorted, [Idx], DESC ), [N] )
-VAR _FirstN = MAXX ( TOPN ( 1, _Sorted, [Idx], ASC ),  [N] )
-VAR _Delta      = DIVIDE ( _LastN - _FirstN, _FirstN )
-VAR _DeltaColor = IF ( _Delta >= 0, "#00E396", "#FF4D6D" )
-VAR _DeltaIcon  = IF ( _Delta >= 0, "▲", "▼" )
+// Último mes y mes anterior (no primer mes — más sensato con datos sparse)
+VAR _MaxIdx  = MAXX ( _Sorted, [Idx] )
+VAR _LastRow = FILTER ( _Sorted, [Idx] = _MaxIdx )
+VAR _PrevRow = FILTER ( _Sorted, [Idx] = _MaxIdx - 1 )
+VAR _LastN   = SUMX ( _LastRow, [N] )
+VAR _PrevN   = SUMX ( _PrevRow, [N] )
+VAR _Delta   = DIVIDE ( _LastN - _PrevN, _PrevN )
+VAR _DeltaColor = IF ( NOT ISBLANK ( _Delta ) && _Delta >= 0, "#00E396", "#FF4D6D" )
+VAR _DeltaIcon  = IF ( NOT ISBLANK ( _Delta ) && _Delta >= 0, "▲", "▼" )
+VAR _DeltaText  = IF ( ISBLANK ( _Delta ) || _PrevN = 0, "", _DeltaIcon & " " & FORMAT ( ABS ( _Delta ), "0.0%" ) & " vs mes anterior" )
+// Fechas para etiquetas de eje X
+VAR _FirstDate = MINX ( _Sorted, Dim_Calendario[InicioMes] )
+VAR _LastDate  = MAXX ( _Sorted, Dim_Calendario[InicioMes] )
+VAR _FirstLbl  = FORMAT ( _FirstDate, "yyyy-MM" )
+VAR _LastLbl   = FORMAT ( _LastDate, "yyyy-MM" )
+// Punto destacado al final
+VAR _LastX = FORMAT ( 10 + ( _N - 1 ) * _StepX, "0" )
+VAR _LastY = FORMAT ( _Height - 15 - DIVIDE ( _LastN - _Min, _Range ) * ( _Height - 30 ), "0" )
 RETURN
     "<div style='background:#1A1A2E;padding:16px 20px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;'>"
-        & "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>"
+        & "<div style='display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;'>"
             & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>📈 Tendencia mensual de ofertas</div>"
-            & "<div style='color:" & _DeltaColor & ";font-size:12px;font-weight:600;'>" & _DeltaIcon & " " & FORMAT ( ABS ( _Delta ), "0.0%" ) & "</div>"
+            & "<div style='color:#00D4FF;font-size:20px;font-weight:600;line-height:1;'>" & FORMAT ( _LastN, "#,##0" )
+                & " <span style='color:" & _DeltaColor & ";font-size:11px;font-weight:500;'>" & _DeltaText & "</span>"
+            & "</div>"
         & "</div>"
         & "<svg viewBox='0 0 " & _Width & " " & _Height & "' width='100%' xmlns='http://www.w3.org/2000/svg'>"
             & "<polyline points='" & _Points & "' stroke='#00D4FF' stroke-width='2' fill='none' stroke-linejoin='round' stroke-linecap='round'/>"
+            & "<circle cx='" & _LastX & "' cy='" & _LastY & "' r='3.5' fill='#00D4FF' stroke='#1A1A2E' stroke-width='1.5'/>"
         & "</svg>"
-        & "<div style='display:flex;justify-content:space-between;font-size:10px;color:#9090A8;margin-top:4px;'>"
-            & "<span>min " & FORMAT ( _Min, "#,##0" ) & "</span>"
-            & "<span>max " & FORMAT ( _Max, "#,##0" ) & "</span>"
+        & "<div style='display:flex;justify-content:space-between;font-size:10px;color:#9090A8;margin-top:6px;'>"
+            & "<span>" & _FirstLbl & " — min " & FORMAT ( _Min, "#,##0" ) & "</span>"
+            & "<span>" & _LastLbl & " — max " & FORMAT ( _Max, "#,##0" ) & "</span>"
         & "</div>"
     & "</div>"
 

@@ -56,13 +56,18 @@ PAISES = {
     "in": ("India",           "IN", "INR", 0.012),
 }
 
-# Queries que vamos a hacer en cada pais (5 por pais)
+# Queries que vamos a hacer en cada pais. Ampliadas a 8 para mas cobertura.
+# Incluyen terminos en ingles (lengua franca tech) + espanol (para mejor
+# matching en ES/MX/CO).
 QUERIES = [
     "data analyst",
     "data scientist",
     "data engineer",
     "business intelligence",
     "machine learning",
+    "sql",
+    "analista de datos",
+    "power bi",
 ]
 
 # Regex para normalizar titulo → rol canonico (orden importa, prim matches first)
@@ -150,11 +155,15 @@ def _mapear_oferta(raw: dict, cod_pais: str) -> dict | None:
     location = raw.get("location", {})
     area = location.get("area", []) or []
     ciudad = area[-1] if area else (location.get("display_name") or label_pais)
-    # Algunas ofertas remotas
-    if re.search(r"\bremote\b", titulo, re.IGNORECASE):
+    # Modalidad: buscar en titulo + descripcion, multilingue
+    # (la mayoria de ofertas no ponen "Remote" en el titulo sino en el body).
+    texto_completo = (titulo + " " + descripcion).lower()
+    if re.search(r"\b(remote|remoto|teletrabajo|wfh|work\s+from\s+home|home\s+office|trabajo\s+en\s+casa|desde\s+casa)\b", texto_completo):
         modalidad = "Remoto"
+    elif re.search(r"\b(hybrid|h[íi]brido|mixto|semi[\s-]?presencial)\b", texto_completo):
+        modalidad = "Híbrido"
     else:
-        modalidad = "Presencial"  # Adzuna no distingue hibrido/remoto bien
+        modalidad = "Presencial"
 
     # Coordenadas si vienen
     lat = raw.get("latitude")
@@ -163,8 +172,9 @@ def _mapear_oferta(raw: dict, cod_pais: str) -> dict | None:
     salario_usd = _convertir_salario(
         raw.get("salary_min"), raw.get("salary_max"), moneda, tasa
     )
-    if salario_usd is None:
-        return None  # ofertas sin salario no son utiles para regresion
+    # Mantener ofertas sin salario - son utiles para conteo, top skills, modalidad,
+    # mapas, clustering. El modelo de regresion (paso 06) las ignora.
+    # (Antes filtrabamos aqui, pero perdiamos ~80% de ES/MX ofertas).
 
     contrato_raw = (raw.get("contract_type") or "").lower()
     if "permanent" in contrato_raw:
@@ -196,7 +206,7 @@ def _mapear_oferta(raw: dict, cod_pais: str) -> dict | None:
         "modalidad": modalidad,
         "tipo_contrato": tipo_contrato,
         "moneda_original": moneda,
-        "salario_anual_usd": float(salario_usd),
+        "salario_anual_usd": float(salario_usd) if salario_usd is not None else None,
         "skills_detectadas": "",  # se rellena en 03_nlp_skills.py
         "n_skills": 0,
         "descripcion": descripcion[:1500],
@@ -265,8 +275,8 @@ def cmd_ingestar(paises: list[str], paginas: int, queries: list[str]) -> int:
     df = df.drop_duplicates(subset=["oferta_id"])
     log.info(f"🧹 Tras dedup: {len(df):,} filas")
 
-    # Guardar archivo crudo del dia
-    raw_path = PATHS.raw / f"adzuna_{datetime.now().date().isoformat()}.csv"
+    # Guardar archivo crudo con timestamp (evita sobrescribir si se corre varias veces el mismo dia)
+    raw_path = PATHS.raw / f"adzuna_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.csv"
     save_csv(df, raw_path, backup=False)
     return 0
 

@@ -50,6 +50,13 @@ def _preparar_features(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
 
 
 def entrenar(df: pd.DataFrame) -> dict:
+    # Filtrar filas sin salario (Adzuna ES/MX a veces no lo provee).
+    n_total = len(df)
+    df = df.dropna(subset=["salario_anual_usd"]).copy()
+    n_filtradas = n_total - len(df)
+    if n_filtradas > 0:
+        log.info(f"📉 Filas sin salario filtradas para regresion: {n_filtradas:,} (queda {len(df):,})")
+
     X, skill_cols = _preparar_features(df)
     y = np.log(df["salario_anual_usd"].clip(lower=1))
 
