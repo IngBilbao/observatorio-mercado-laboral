@@ -10,14 +10,21 @@
 // la paleta Bilbao Analytics (#0D0D1A, #1A1A2E, #00D4FF, #7B2FBE, #00E396,
 // #FFB020, #FF4D6D, #9090A8, #E8E8F0).
 //
+// TIPOS DE COMPONENTES:
+//   · KPI Cards: tarjetas con número grande + variación
+//   · Banners: cintas narrativas coloreadas
+//   · Narrativa: párrafos dinámicos
+//   · Tablas: HTML tables con paleta de marca
+//   · Charts SVG: sparklines, boxplots, líneas de forecast, bars comparativos
+//
 // Organización por carpeta (cada carpeta = una página del dashboard):
-//   P1 · Resumen Ejecutivo    → 8 medidas
+//   P1 · Resumen Ejecutivo    → 9 medidas (incluye sparkline)
 //   P2 · Análisis de Skills   → 6 medidas
-//   P3 · Inteligencia Salarial → 7 medidas
+//   P3 · Inteligencia Salarial → 9 medidas (incluye 2 boxplots)
 //   P4 · Mapa Geográfico      → 5 medidas
-//   P5 · Predicciones Prophet → 6 medidas
-//   P6 · Perfiles Clusters    → 5 medidas
-//                              TOTAL: 37 medidas HTML
+//   P5 · Predicciones Prophet → 7 medidas (incluye línea con banda)
+//   P6 · Perfiles Clusters    → 6 medidas (incluye bars comparativo)
+//                              TOTAL: 42 medidas HTML
 // ============================================================================
 
 
@@ -124,6 +131,52 @@ RETURN
         & ". El salario mediano se ubica en <b style='color:#7B2FBE;'>$" & FORMAT ( DIVIDE ( _Sal, 1000 ), "0.0" ) & "K USD</b>, "
         & "con <b style='color:#00E396;'>" & FORMAT ( _Rem, "0.0%" ) & " de ofertas remotas</b>. "
         & IF ( ISBLANK ( _Top ), "", "Skill destacada: <b style='color:#FFB020;'>" & _Top & "</b>." )
+    & "</div>"
+
+
+HTML P1 · Sparkline Tendencia =
+// SVG sparkline con la tendencia mensual de ofertas en los meses con datos.
+// Calcula el delta absoluto entre el primer y último mes para mostrar
+// variación global del periodo.
+VAR _Data =
+    ADDCOLUMNS (
+        FILTER ( VALUES ( Dim_Calendario[InicioMes] ), CALCULATE ( [Total Ofertas] ) > 0 ),
+        "N", CALCULATE ( [Total Ofertas] )
+    )
+VAR _Sorted = ADDCOLUMNS ( _Data, "Idx", RANKX ( _Data, Dim_Calendario[InicioMes], , ASC, DENSE ) )
+VAR _Max    = MAXX ( _Sorted, [N] ) + 0.0001
+VAR _Min    = MINX ( _Sorted, [N] )
+VAR _Range  = _Max - _Min + 0.0001
+VAR _N      = COUNTROWS ( _Sorted ) + 0
+VAR _Width  = 280
+VAR _Height = 70
+VAR _StepX  = DIVIDE ( _Width - 10, _N - 1 )
+VAR _Points =
+    CONCATENATEX (
+        _Sorted,
+        FORMAT ( 5 + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
+        FORMAT ( _Height - 5 - DIVIDE ( [N] - _Min, _Range ) * ( _Height - 15 ), "0" ),
+        " ",
+        [Idx], ASC
+    )
+VAR _LastN  = MAXX ( TOPN ( 1, _Sorted, [Idx], DESC ), [N] )
+VAR _FirstN = MAXX ( TOPN ( 1, _Sorted, [Idx], ASC ),  [N] )
+VAR _Delta      = DIVIDE ( _LastN - _FirstN, _FirstN )
+VAR _DeltaColor = IF ( _Delta >= 0, "#00E396", "#FF4D6D" )
+VAR _DeltaIcon  = IF ( _Delta >= 0, "▲", "▼" )
+RETURN
+    "<div style='background:#1A1A2E;padding:16px 20px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;'>"
+        & "<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>"
+            & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>📈 Tendencia mensual de ofertas</div>"
+            & "<div style='color:" & _DeltaColor & ";font-size:12px;font-weight:600;'>" & _DeltaIcon & " " & FORMAT ( ABS ( _Delta ), "0.0%" ) & "</div>"
+        & "</div>"
+        & "<svg viewBox='0 0 " & _Width & " " & _Height & "' width='100%' xmlns='http://www.w3.org/2000/svg'>"
+            & "<polyline points='" & _Points & "' stroke='#00D4FF' stroke-width='2' fill='none' stroke-linejoin='round' stroke-linecap='round'/>"
+        & "</svg>"
+        & "<div style='display:flex;justify-content:space-between;font-size:10px;color:#9090A8;margin-top:4px;'>"
+            & "<span>min " & FORMAT ( _Min, "#,##0" ) & "</span>"
+            & "<span>max " & FORMAT ( _Max, "#,##0" ) & "</span>"
+        & "</div>"
     & "</div>"
 
 
@@ -334,6 +387,121 @@ RETURN
     & "</div>"
 
 
+HTML P3 · Boxplot Salario por Nivel =
+// SVG boxplot horizontal con la distribución de salarios (min, Q1, mediana, Q3, max)
+// por nivel de experiencia. Ordenado Junior → Lead de arriba a abajo.
+VAR _W = 360
+VAR _H = 220
+VAR _LP = 70
+VAR _RP = 20
+VAR _PW = _W - _LP - _RP
+VAR _MinAll = CALCULATE ( MIN ( Fact_Ofertas[salario_anual_usd] ), ALL ( Fact_Ofertas[nivel_experiencia] ) )
+VAR _MaxAll = CALCULATE ( MAX ( Fact_Ofertas[salario_anual_usd] ), ALL ( Fact_Ofertas[nivel_experiencia] ) )
+VAR _Range  = _MaxAll - _MinAll + 0.0001
+VAR _Niveles =
+    ADDCOLUMNS (
+        SUMMARIZE ( Fact_Ofertas, Fact_Ofertas[nivel_experiencia] ),
+        "Ord", SWITCH ( Fact_Ofertas[nivel_experiencia], "Junior", 1, "Mid", 2, "Senior", 3, "Lead", 4, 99 )
+    )
+VAR _Stats =
+    ADDCOLUMNS (
+        _Niveles,
+        "Q1",  CALCULATE ( PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.25 ) ),
+        "Med", CALCULATE ( PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.50 ) ),
+        "Q3",  CALCULATE ( PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.75 ) ),
+        "Mn",  CALCULATE ( MIN ( Fact_Ofertas[salario_anual_usd] ) ),
+        "Mx",  CALCULATE ( MAX ( Fact_Ofertas[salario_anual_usd] ) )
+    )
+VAR _Boxes =
+    CONCATENATEX (
+        _Stats,
+        VAR _Y    = 30 + ( [Ord] - 1 ) * 42
+        VAR _XMin = _LP + DIVIDE ( [Mn]  - _MinAll, _Range ) * _PW
+        VAR _XQ1  = _LP + DIVIDE ( [Q1]  - _MinAll, _Range ) * _PW
+        VAR _XMed = _LP + DIVIDE ( [Med] - _MinAll, _Range ) * _PW
+        VAR _XQ3  = _LP + DIVIDE ( [Q3]  - _MinAll, _Range ) * _PW
+        VAR _XMax = _LP + DIVIDE ( [Mx]  - _MinAll, _Range ) * _PW
+        RETURN
+            "<text x='" & _LP - 8 & "' y='" & _Y + 4 & "' fill='#E8E8F0' font-size='11' font-family='Segoe UI' text-anchor='end'>" & Fact_Ofertas[nivel_experiencia] & "</text>"
+            & "<line x1='" & FORMAT ( _XMin, "0" ) & "' y1='" & _Y & "' x2='" & FORMAT ( _XMax, "0" ) & "' y2='" & _Y & "' stroke='#7B2FBE' stroke-width='1' stroke-opacity='0.5'/>"
+            & "<line x1='" & FORMAT ( _XMin, "0" ) & "' y1='" & _Y - 6 & "' x2='" & FORMAT ( _XMin, "0" ) & "' y2='" & _Y + 6 & "' stroke='#7B2FBE' stroke-width='1'/>"
+            & "<line x1='" & FORMAT ( _XMax, "0" ) & "' y1='" & _Y - 6 & "' x2='" & FORMAT ( _XMax, "0" ) & "' y2='" & _Y + 6 & "' stroke='#7B2FBE' stroke-width='1'/>"
+            & "<rect x='" & FORMAT ( _XQ1, "0" ) & "' y='" & _Y - 12 & "' width='" & FORMAT ( _XQ3 - _XQ1, "0" ) & "' height='24' fill='#7B2FBE' fill-opacity='0.35' stroke='#7B2FBE' stroke-width='1'/>"
+            & "<line x1='" & FORMAT ( _XMed, "0" ) & "' y1='" & _Y - 12 & "' x2='" & FORMAT ( _XMed, "0" ) & "' y2='" & _Y + 12 & "' stroke='#00D4FF' stroke-width='2'/>",
+        "",
+        [Ord], ASC
+    )
+RETURN
+    "<div style='background:#1A1A2E;padding:16px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;'>💰 Distribución salarial por nivel</div>"
+        & "<svg viewBox='0 0 " & _W & " " & _H & "' width='100%' xmlns='http://www.w3.org/2000/svg'>"
+            & _Boxes
+            & "<line x1='" & _LP & "' y1='195' x2='" & _W - _RP & "' y2='195' stroke='#9090A8' stroke-width='0.5'/>"
+            & "<text x='" & _LP & "' y='210' fill='#9090A8' font-size='10' font-family='Segoe UI'>$" & FORMAT ( DIVIDE ( _MinAll, 1000 ), "0" ) & "K</text>"
+            & "<text x='" & _W - _RP & "' y='210' fill='#9090A8' font-size='10' font-family='Segoe UI' text-anchor='end'>$" & FORMAT ( DIVIDE ( _MaxAll, 1000 ), "0" ) & "K</text>"
+        & "</svg>"
+        & "<div style='display:flex;gap:14px;font-size:10px;color:#9090A8;margin-top:8px;'>"
+            & "<span><span style='display:inline-block;width:10px;height:10px;background:#7B2FBE;opacity:0.35;'></span> Q1–Q3</span>"
+            & "<span><span style='color:#00D4FF;font-weight:600;'>│</span> Mediana</span>"
+            & "<span><span style='color:#7B2FBE;'>──</span> Rango min–max</span>"
+        & "</div>"
+    & "</div>"
+
+
+HTML P3 · Boxplot Salario por Rol =
+// SVG boxplot horizontal por rol_normalizado, ordenado por mediana ascendente
+// (de menor a mayor salario mediano).
+VAR _W = 360
+VAR _H = 380
+VAR _LP = 100
+VAR _RP = 20
+VAR _PW = _W - _LP - _RP
+VAR _MinAll = CALCULATE ( MIN ( Fact_Ofertas[salario_anual_usd] ), ALL ( Fact_Ofertas[rol_normalizado] ) )
+VAR _MaxAll = CALCULATE ( MAX ( Fact_Ofertas[salario_anual_usd] ), ALL ( Fact_Ofertas[rol_normalizado] ) )
+VAR _Range  = _MaxAll - _MinAll + 0.0001
+VAR _Roles =
+    ADDCOLUMNS (
+        SUMMARIZE ( Fact_Ofertas, Fact_Ofertas[rol_normalizado] ),
+        "Med", CALCULATE ( PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.50 ) )
+    )
+VAR _RolesOrd = ADDCOLUMNS ( _Roles, "Ord", RANKX ( _Roles, [Med], , ASC, DENSE ) )
+VAR _Stats =
+    ADDCOLUMNS (
+        _RolesOrd,
+        "Q1", CALCULATE ( PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.25 ) ),
+        "Q3", CALCULATE ( PERCENTILEX.INC ( Fact_Ofertas, Fact_Ofertas[salario_anual_usd], 0.75 ) ),
+        "Mn", CALCULATE ( MIN ( Fact_Ofertas[salario_anual_usd] ) ),
+        "Mx", CALCULATE ( MAX ( Fact_Ofertas[salario_anual_usd] ) )
+    )
+VAR _Boxes =
+    CONCATENATEX (
+        _Stats,
+        VAR _Y    = 30 + ( [Ord] - 1 ) * 38
+        VAR _XMin = _LP + DIVIDE ( [Mn]  - _MinAll, _Range ) * _PW
+        VAR _XQ1  = _LP + DIVIDE ( [Q1]  - _MinAll, _Range ) * _PW
+        VAR _XMed = _LP + DIVIDE ( [Med] - _MinAll, _Range ) * _PW
+        VAR _XQ3  = _LP + DIVIDE ( [Q3]  - _MinAll, _Range ) * _PW
+        VAR _XMax = _LP + DIVIDE ( [Mx]  - _MinAll, _Range ) * _PW
+        RETURN
+            "<text x='" & _LP - 8 & "' y='" & _Y + 4 & "' fill='#E8E8F0' font-size='10' font-family='Segoe UI' text-anchor='end'>" & Fact_Ofertas[rol_normalizado] & "</text>"
+            & "<line x1='" & FORMAT ( _XMin, "0" ) & "' y1='" & _Y & "' x2='" & FORMAT ( _XMax, "0" ) & "' y2='" & _Y & "' stroke='#7B2FBE' stroke-width='1' stroke-opacity='0.5'/>"
+            & "<rect x='" & FORMAT ( _XQ1, "0" ) & "' y='" & _Y - 10 & "' width='" & FORMAT ( _XQ3 - _XQ1, "0" ) & "' height='20' fill='#7B2FBE' fill-opacity='0.35' stroke='#7B2FBE' stroke-width='1'/>"
+            & "<line x1='" & FORMAT ( _XMed, "0" ) & "' y1='" & _Y - 10 & "' x2='" & FORMAT ( _XMed, "0" ) & "' y2='" & _Y + 10 & "' stroke='#00D4FF' stroke-width='2'/>",
+        "",
+        [Ord], ASC
+    )
+RETURN
+    "<div style='background:#1A1A2E;padding:16px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;'>🎯 Distribución salarial por rol (ordenado por mediana)</div>"
+        & "<svg viewBox='0 0 " & _W & " " & _H & "' width='100%' xmlns='http://www.w3.org/2000/svg'>"
+            & _Boxes
+            & "<line x1='" & _LP & "' y1='350' x2='" & _W - _RP & "' y2='350' stroke='#9090A8' stroke-width='0.5'/>"
+            & "<text x='" & _LP & "' y='365' fill='#9090A8' font-size='10' font-family='Segoe UI'>$" & FORMAT ( DIVIDE ( _MinAll, 1000 ), "0" ) & "K</text>"
+            & "<text x='" & _W - _RP & "' y='365' fill='#9090A8' font-size='10' font-family='Segoe UI' text-anchor='end'>$" & FORMAT ( DIVIDE ( _MaxAll, 1000 ), "0" ) & "K</text>"
+        & "</svg>"
+    & "</div>"
+
+
 // ════════════════════════════════════════════════════════════════════════════
 //  P4 · MAPA GEOGRÁFICO
 // ════════════════════════════════════════════════════════════════════════════
@@ -518,6 +686,71 @@ RETURN
     & "</div>"
 
 
+HTML P5 · Linea Forecast con Banda =
+// SVG con: línea histórica (azul continua), línea forecast (violeta punteada),
+// banda de confianza 80% (polígono violeta semi-transparente). Filtrar por
+// skill en slicer; sin filtro muestra el promedio sobre todas las skills.
+VAR _W   = 360
+VAR _H   = 180
+VAR _Pad = 15
+VAR _Data =
+    ADDCOLUMNS (
+        SUMMARIZE ( Fact_Predicciones, Fact_Predicciones[fecha], Fact_Predicciones[historico] ),
+        "Y",  CALCULATE ( AVERAGE ( Fact_Predicciones[prediccion] ) ),
+        "Lo", CALCULATE ( AVERAGE ( Fact_Predicciones[banda_inferior] ) ),
+        "Hi", CALCULATE ( AVERAGE ( Fact_Predicciones[banda_superior] ) )
+    )
+VAR _Ranked = ADDCOLUMNS ( _Data, "Idx", RANKX ( _Data, Fact_Predicciones[fecha], , ASC, DENSE ) )
+VAR _MaxY  = MAXX ( _Ranked, [Hi] ) + 0.0001
+VAR _MinY  = MINX ( _Ranked, [Lo] )
+VAR _RY    = _MaxY - _MinY + 0.0001
+VAR _N     = COUNTROWS ( _Ranked ) + 0
+VAR _StepX = DIVIDE ( _W - 2 * _Pad, _N - 1 )
+VAR _Hist  = FILTER ( _Ranked, Fact_Predicciones[historico] = TRUE )
+VAR _Fcst  = FILTER ( _Ranked, Fact_Predicciones[historico] = FALSE )
+VAR _HistPts =
+    CONCATENATEX ( _Hist,
+        FORMAT ( _Pad + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
+        FORMAT ( _H - _Pad - DIVIDE ( [Y] - _MinY, _RY ) * ( _H - 2 * _Pad ), "0" ),
+        " ", [Idx], ASC
+    )
+VAR _FcstPts =
+    CONCATENATEX ( _Fcst,
+        FORMAT ( _Pad + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
+        FORMAT ( _H - _Pad - DIVIDE ( [Y] - _MinY, _RY ) * ( _H - 2 * _Pad ), "0" ),
+        " ", [Idx], ASC
+    )
+VAR _UpperPts =
+    CONCATENATEX ( _Fcst,
+        FORMAT ( _Pad + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
+        FORMAT ( _H - _Pad - DIVIDE ( [Hi] - _MinY, _RY ) * ( _H - 2 * _Pad ), "0" ),
+        " ", [Idx], ASC
+    )
+VAR _LowerPts =
+    CONCATENATEX ( _Fcst,
+        FORMAT ( _Pad + ( [Idx] - 1 ) * _StepX, "0" ) & "," &
+        FORMAT ( _H - _Pad - DIVIDE ( [Lo] - _MinY, _RY ) * ( _H - 2 * _Pad ), "0" ),
+        " ", [Idx], DESC
+    )
+VAR _Band = _UpperPts & " " & _LowerPts
+VAR _Skill = SELECTEDVALUE ( Fact_Predicciones[skill], "(selecciona una skill)" )
+RETURN
+    "<div style='background:#1A1A2E;padding:16px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px;'>🔮 Forecast Prophet</div>"
+        & "<div style='color:#00D4FF;font-size:14px;font-weight:600;margin-bottom:8px;'>" & _Skill & "</div>"
+        & "<svg viewBox='0 0 " & _W & " " & _H & "' width='100%' xmlns='http://www.w3.org/2000/svg'>"
+            & "<polygon points='" & _Band & "' fill='#7B2FBE' fill-opacity='0.2'/>"
+            & "<polyline points='" & _HistPts & "' stroke='#00D4FF' stroke-width='2' fill='none' stroke-linejoin='round'/>"
+            & "<polyline points='" & _FcstPts & "' stroke='#7B2FBE' stroke-width='2' fill='none' stroke-linejoin='round' stroke-dasharray='4,2'/>"
+        & "</svg>"
+        & "<div style='display:flex;gap:16px;font-size:10px;color:#9090A8;margin-top:8px;'>"
+            & "<span><span style='color:#00D4FF;font-weight:600;'>──</span> Histórico</span>"
+            & "<span><span style='color:#7B2FBE;font-weight:600;'>─ ─</span> Forecast</span>"
+            & "<span><span style='background:#7B2FBE;opacity:0.3;display:inline-block;width:10px;height:10px;'></span> IC 80%</span>"
+        & "</div>"
+    & "</div>"
+
+
 // ════════════════════════════════════════════════════════════════════════════
 //  P6 · PERFILES / CLUSTERS
 // ════════════════════════════════════════════════════════════════════════════
@@ -614,4 +847,60 @@ RETURN
         & "El arquetipo mas numeroso es <b style='color:#00D4FF;'>" & _NombreM & "</b>, "
         & "mientras que el mejor remunerado es <b style='color:#00E396;'>" & _NombreR & "</b> "
         & "con una mediana de <b>$" & FORMAT ( DIVIDE ( _SalR, 1000 ), "0.0" ) & "K USD</b>."
+    & "</div>"
+
+
+HTML P6 · Bars Comparativo Clusters =
+// Bars comparativas (CSS, no SVG) con 2 métricas por cluster: # ofertas y
+// salario mediano. Color del nombre = color asociado al rol dominante.
+VAR _Data =
+    SUMMARIZE (
+        Dim_Clusters,
+        Dim_Clusters[cluster_nombre],
+        Dim_Clusters[n_ofertas],
+        Dim_Clusters[salario_mediano_usd],
+        Dim_Clusters[rol_dominante]
+    )
+VAR _MaxN   = MAXX ( _Data, Dim_Clusters[n_ofertas] ) + 0.0001
+VAR _MaxSal = MAXX ( _Data, Dim_Clusters[salario_mediano_usd] ) + 0.0001
+VAR _Rows =
+    CONCATENATEX (
+        _Data,
+        VAR _Color =
+            SWITCH (
+                Dim_Clusters[rol_dominante],
+                "Data Analyst",       "#FFB020",
+                "Data Scientist",     "#00E396",
+                "Data Engineer",      "#00D4FF",
+                "Analytics Engineer", "#7B2FBE",
+                "ML Engineer",        "#FF4D6D",
+                "#9090A8"
+            )
+        VAR _PctN = DIVIDE ( Dim_Clusters[n_ofertas], _MaxN ) * 100
+        VAR _PctS = DIVIDE ( Dim_Clusters[salario_mediano_usd], _MaxSal ) * 100
+        RETURN
+            "<div style='margin-bottom:14px;'>"
+                & "<div style='color:" & _Color & ";font-size:13px;font-weight:600;margin-bottom:6px;'>" & Dim_Clusters[cluster_nombre] & "</div>"
+                & "<div style='display:flex;align-items:center;margin-bottom:4px;'>"
+                    & "<div style='color:#9090A8;font-size:10px;width:60px;'>Ofertas</div>"
+                    & "<div style='flex:1;background:#2A2A45;border-radius:3px;height:14px;'>"
+                        & "<div style='background:" & _Color & ";width:" & FORMAT ( _PctN, "0" ) & "%;height:100%;border-radius:3px;'></div>"
+                    & "</div>"
+                    & "<div style='color:" & _Color & ";font-size:11px;width:50px;text-align:right;font-weight:600;'>" & FORMAT ( Dim_Clusters[n_ofertas], "#,##0" ) & "</div>"
+                & "</div>"
+                & "<div style='display:flex;align-items:center;'>"
+                    & "<div style='color:#9090A8;font-size:10px;width:60px;'>Salario</div>"
+                    & "<div style='flex:1;background:#2A2A45;border-radius:3px;height:14px;'>"
+                        & "<div style='background:#00E396;width:" & FORMAT ( _PctS, "0" ) & "%;height:100%;border-radius:3px;'></div>"
+                    & "</div>"
+                    & "<div style='color:#00E396;font-size:11px;width:50px;text-align:right;font-weight:600;'>$" & FORMAT ( DIVIDE ( Dim_Clusters[salario_mediano_usd], 1000 ), "0" ) & "K</div>"
+                & "</div>"
+            & "</div>",
+        "",
+        Dim_Clusters[n_ofertas], DESC
+    )
+RETURN
+    "<div style='background:#1A1A2E;padding:16px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;'>👥 Comparativo de arquetipos</div>"
+        & _Rows
     & "</div>"
