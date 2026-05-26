@@ -11,6 +11,7 @@ let
                       ),
     Promovido       = Table.PromoteHeaders(Origen, [PromoteAllScalars = true]),
 
+    // "en-US" fuerza el punto como separador decimal (ver 05_Fact_Ofertas.pq)
     Tipos           = Table.TransformColumnTypes(Promovido, {
                         {"ds",         type date},
                         {"yhat",       type number},
@@ -18,7 +19,7 @@ let
                         {"yhat_upper", type number},
                         {"skill",      type text},
                         {"historico",  type logical}
-                      }),
+                      }, "en-US"),
 
     Renombrado      = Table.RenameColumns(Tipos, {
                         {"ds",         "fecha"},

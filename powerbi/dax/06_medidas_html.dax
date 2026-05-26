@@ -1,0 +1,303 @@
+// ============================================================================
+// MEDIDAS HTML — Renderizado de tarjetas, banners y tablas con paleta Bilbao Analytics
+// ----------------------------------------------------------------------------
+// Tabla destino:  06_medidas_html
+// Visual requerido en Power BI: "HTML Content" (custom visual de Daniel
+// Marsh-Patrick, disponible en AppSource) o cualquier visual que renderice
+// HTML inline.
+//
+// Estas medidas devuelven strings HTML completos con estilos inline.
+// Diseñadas para reemplazar visuales nativos cuando se quiere control
+// pixel-perfect del estilo (paleta Bilbao Analytics, tipografía Segoe UI,
+// fondos oscuros).
+//
+// Categorias (carpetas de visualizacion):
+//   A · Cards KPI           → 5 tarjetas con KPIs principales
+//   B · Banners             → 2 banners narrativos
+//   C · Narrativa dinamica  → 1 resumen ejecutivo dinamico
+//   D · Tablas HTML         → 2 tablas con paleta de marca
+//   E · Componentes         → 2 componentes reutilizables (badge, trend)
+// ============================================================================
+
+
+// ─── A · CARDS KPI ──────────────────────────────────────────────────────────
+
+HTML · Card Total Ofertas =
+VAR _Total = [Total Ofertas]
+VAR _Var   = [Var MoM Ofertas]
+VAR _Color = IF ( NOT ISBLANK ( _Var ) && _Var >= 0, "#00E396", "#FF4D6D" )
+VAR _Arrow = IF ( NOT ISBLANK ( _Var ) && _Var >= 0, "▲", "▼" )
+VAR _VarText = IF ( ISBLANK ( _Var ), "—", _Arrow & " " & FORMAT ( _Var, "0.0%" ) & " MoM" )
+RETURN
+    "<div style='background:#1A1A2E;padding:20px 24px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;border-left:3px solid #00D4FF;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>📊 Total Ofertas</div>"
+        & "<div style='color:#00D4FF;font-size:38px;font-weight:300;line-height:1.1;margin-top:8px;'>"
+        & FORMAT ( _Total, "#,##0" )
+        & "</div>"
+        & "<div style='color:" & _Color & ";font-size:13px;font-weight:600;margin-top:8px;'>"
+        & _VarText
+        & "</div>"
+    & "</div>"
+
+
+HTML · Card Salario Mediano =
+VAR _Med = [Salario Mediano USD]
+VAR _P10 = [Salario P10 USD]
+VAR _P90 = [Salario P90 USD]
+RETURN
+    "<div style='background:#1A1A2E;padding:20px 24px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;border-left:3px solid #7B2FBE;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>💰 Salario Mediano</div>"
+        & "<div style='color:#7B2FBE;font-size:38px;font-weight:300;line-height:1.1;margin-top:8px;'>$"
+        & FORMAT ( DIVIDE ( _Med, 1000 ), "0.0" )
+        & "K</div>"
+        & "<div style='color:#9090A8;font-size:12px;margin-top:8px;'>Rango p10-p90: $"
+        & FORMAT ( DIVIDE ( _P10, 1000 ), "0" )
+        & "K - $"
+        & FORMAT ( DIVIDE ( _P90, 1000 ), "0" )
+        & "K</div>"
+    & "</div>"
+
+
+HTML · Card Pct Remoto =
+VAR _Remoto  = [Pct Remoto]
+VAR _Hibrido = [Pct Hibrido]
+RETURN
+    "<div style='background:#1A1A2E;padding:20px 24px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;border-left:3px solid #00E396;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>🌐 Trabajo Remoto</div>"
+        & "<div style='color:#00E396;font-size:38px;font-weight:300;line-height:1.1;margin-top:8px;'>"
+        & FORMAT ( _Remoto, "0.0%" )
+        & "</div>"
+        & "<div style='color:#9090A8;font-size:12px;margin-top:8px;'>+ "
+        & FORMAT ( _Hibrido, "0.0%" )
+        & " hibrido</div>"
+    & "</div>"
+
+
+HTML · Card Top Skill =
+VAR _Top = [Top Skill del Mes]
+RETURN
+    "<div style='background:#1A1A2E;padding:20px 24px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;border-left:3px solid #FFB020;'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>🏆 Top Skill del Periodo</div>"
+        & "<div style='color:#FFB020;font-size:28px;font-weight:300;line-height:1.1;margin-top:8px;'>"
+        & IF ( ISBLANK ( _Top ), "—", _Top )
+        & "</div>"
+        & "<div style='color:#9090A8;font-size:12px;margin-top:8px;'>Skill con mayor numero de menciones</div>"
+    & "</div>"
+
+
+HTML · Card Skills en Alerta =
+VAR _Count = [Skills en Alerta] + 0
+VAR _Color = IF ( _Count > 0, "#FF4D6D", "#9090A8" )
+VAR _Icono = IF ( _Count > 0, "🚨", "✅" )
+VAR _Texto = IF ( _Count > 0, "Skills con cambio >=30% MoM", "Sin alertas - mercado estable" )
+RETURN
+    "<div style='background:#1A1A2E;padding:20px 24px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;border-left:3px solid " & _Color & ";'>"
+        & "<div style='color:#9090A8;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;'>" & _Icono & " Alertas Activas</div>"
+        & "<div style='color:" & _Color & ";font-size:38px;font-weight:300;line-height:1.1;margin-top:8px;'>"
+        & FORMAT ( _Count, "#,##0" )
+        & "</div>"
+        & "<div style='color:#9090A8;font-size:12px;margin-top:8px;'>" & _Texto & "</div>"
+    & "</div>"
+
+
+// ─── B · BANNERS ────────────────────────────────────────────────────────────
+
+HTML · Banner Estado Periodo =
+VAR _Alerts = [Skills en Alerta] + 0
+VAR _Color = SWITCH (
+    TRUE (),
+    _Alerts >= 3, "#FF4D6D",
+    _Alerts >  0, "#FFB020",
+    "#00E396"
+)
+VAR _Texto = SWITCH (
+    TRUE (),
+    _Alerts >= 3, "🚨 Mercado en movimiento intenso - " & _Alerts & " skills con cambios criticos detectados",
+    _Alerts >  0, "⚡ Atencion - " & _Alerts & " skill(s) con cambios notables este periodo",
+    "✅ Mercado estable - sin cambios significativos detectados"
+)
+RETURN
+    "<div style='background:#1A1A2E;border:1px solid " & _Color & ";border-left:4px solid " & _Color & ";border-radius:6px;padding:14px 20px;font-family:Segoe UI,Arial,sans-serif;color:" & _Color & ";font-size:14px;font-weight:600;'>"
+    & _Texto
+    & "</div>"
+
+
+HTML · Banner Top Driver Salario =
+VAR _TopRow =
+    TOPN (
+        1,
+        FILTER (
+            SUMMARIZE ( Fact_Coef_Salarios, Fact_Coef_Salarios[feature_legible], Fact_Coef_Salarios[categoria_feature] ),
+            [Impacto Feature Pct] > 0 && Fact_Coef_Salarios[categoria_feature] = "Skill"
+        ),
+        [Impacto Feature Pct],
+        DESC
+    )
+VAR _Nombre  = CONCATENATEX ( _TopRow, Fact_Coef_Salarios[feature_legible] )
+VAR _Impacto = SUMX ( _TopRow, [Impacto Feature Pct] )
+RETURN
+    "<div style='background:#1A1A2E;padding:16px 20px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#E8E8F0;font-size:14px;border-left:3px solid #FFB020;'>"
+        & "<span style='color:#9090A8;'>💡 Insight del modelo de salarios:</span> "
+        & "Incorporar <b style='color:#FFB020;'>"
+        & IF ( ISBLANK ( _Nombre ), "—", _Nombre )
+        & "</b> al perfil profesional aumenta el salario esperado en "
+        & "<b style='color:#00E396;'>+"
+        & FORMAT ( _Impacto, "0.0" )
+        & "%</b> ceteris paribus."
+    & "</div>"
+
+
+// ─── C · NARRATIVA DINÁMICA ────────────────────────────────────────────────
+
+HTML · Resumen Ejecutivo =
+VAR _Total    = [Total Ofertas]
+VAR _Var      = [Var MoM Ofertas]
+VAR _Sal      = [Salario Mediano USD]
+VAR _Rem      = [Pct Remoto]
+VAR _Top      = [Top Skill del Mes]
+VAR _VarLabel = IF ( _Var >= 0, "crecio", "decrecio" )
+VAR _AbsVar   = ABS ( _Var )
+VAR _VarColor = IF ( _Var >= 0, "#00E396", "#FF4D6D" )
+RETURN
+    "<div style='background:#1A1A2E;padding:24px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#E8E8F0;line-height:1.6;font-size:14px;'>"
+        & "<div style='color:#00D4FF;font-size:16px;font-weight:600;margin-bottom:12px;'>📋 Resumen Ejecutivo</div>"
+        & "El mercado de datos y tecnologia registro <b style='color:#00D4FF;'>"
+        & FORMAT ( _Total, "#,##0" )
+        & " ofertas</b> en el periodo seleccionado, "
+        & IF ( ISBLANK ( _Var ), "",
+            "con una variacion que <b style='color:" & _VarColor & ";'>" & _VarLabel & " un " & FORMAT ( _AbsVar, "0.0%" ) & "</b> respecto al mes anterior. "
+        )
+        & "El salario mediano se ubica en <b style='color:#7B2FBE;'>$"
+        & FORMAT ( DIVIDE ( _Sal, 1000 ), "0.0" )
+        & "K USD anuales</b>, "
+        & "con <b style='color:#00E396;'>"
+        & FORMAT ( _Rem, "0.0%" )
+        & " de las ofertas en modalidad remota</b>. "
+        & IF ( ISBLANK ( _Top ), "",
+            "La skill mas destacada del periodo es <b style='color:#FFB020;'>" & _Top & "</b>."
+        )
+    & "</div>"
+
+
+// ─── D · TABLAS HTML ────────────────────────────────────────────────────────
+
+HTML · Tabla Top 5 Skills =
+VAR _TopSkills =
+    TOPN (
+        5,
+        SUMMARIZE (
+            Fact_Skills_Oferta,
+            Dim_Skills[skill],
+            "Cnt", COUNTROWS ( Fact_Skills_Oferta ),
+            "Pct", DIVIDE ( DISTINCTCOUNT ( Fact_Skills_Oferta[oferta_id] ), [Total Ofertas] )
+        ),
+        [Cnt],
+        DESC
+    )
+VAR _Rows =
+    CONCATENATEX (
+        _TopSkills,
+        "<tr><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;'>" & Dim_Skills[skill]
+            & "</td><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;text-align:right;color:#00D4FF;font-weight:600;'>" & FORMAT ( [Cnt], "#,##0" )
+            & "</td><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;text-align:right;color:#9090A8;'>" & FORMAT ( [Pct], "0.0%" )
+        & "</td></tr>",
+        "",
+        [Cnt], DESC
+    )
+RETURN
+    "<div style='background:#1A1A2E;padding:20px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#E8E8F0;'>"
+        & "<div style='color:#00D4FF;font-size:14px;font-weight:600;margin-bottom:12px;'>🏆 Top 5 Skills mas demandadas</div>"
+        & "<table style='width:100%;border-collapse:collapse;font-size:13px;'>"
+            & "<thead><tr style='color:#9090A8;text-transform:uppercase;font-size:10px;letter-spacing:1px;'>"
+                & "<th style='padding:8px 12px;text-align:left;border-bottom:1px solid #7B2FBE;'>Skill</th>"
+                & "<th style='padding:8px 12px;text-align:right;border-bottom:1px solid #7B2FBE;'>Ofertas</th>"
+                & "<th style='padding:8px 12px;text-align:right;border-bottom:1px solid #7B2FBE;'>% del total</th>"
+            & "</tr></thead><tbody>"
+            & _Rows
+        & "</tbody></table>"
+    & "</div>"
+
+
+HTML · Tabla Clusters =
+VAR _Rows =
+    CONCATENATEX (
+        SUMMARIZE (
+            Dim_Clusters,
+            Dim_Clusters[cluster_id],
+            Dim_Clusters[cluster_nombre],
+            Dim_Clusters[n_ofertas],
+            Dim_Clusters[salario_mediano_usd],
+            Dim_Clusters[top_skills]
+        ),
+        "<tr><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;color:#7B2FBE;font-weight:600;'>" & Dim_Clusters[cluster_nombre]
+            & "</td><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;text-align:right;color:#00D4FF;'>" & FORMAT ( Dim_Clusters[n_ofertas], "#,##0" )
+            & "</td><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;text-align:right;color:#00E396;'>$" & FORMAT ( DIVIDE ( Dim_Clusters[salario_mediano_usd], 1000 ), "0" ) & "K"
+            & "</td><td style='padding:8px 12px;border-bottom:1px solid #2A2A45;color:#9090A8;font-size:11px;'>" & Dim_Clusters[top_skills]
+        & "</td></tr>",
+        "",
+        Dim_Clusters[n_ofertas], DESC
+    )
+RETURN
+    "<div style='background:#1A1A2E;padding:20px;border-radius:8px;font-family:Segoe UI,Arial,sans-serif;color:#E8E8F0;'>"
+        & "<div style='color:#00D4FF;font-size:14px;font-weight:600;margin-bottom:12px;'>👥 Arquetipos Profesionales (K-means)</div>"
+        & "<table style='width:100%;border-collapse:collapse;font-size:12px;'>"
+            & "<thead><tr style='color:#9090A8;text-transform:uppercase;font-size:10px;letter-spacing:1px;'>"
+                & "<th style='padding:8px 12px;text-align:left;border-bottom:1px solid #7B2FBE;'>Arquetipo</th>"
+                & "<th style='padding:8px 12px;text-align:right;border-bottom:1px solid #7B2FBE;'>Ofertas</th>"
+                & "<th style='padding:8px 12px;text-align:right;border-bottom:1px solid #7B2FBE;'>Mediana</th>"
+                & "<th style='padding:8px 12px;text-align:left;border-bottom:1px solid #7B2FBE;'>Top Skills</th>"
+            & "</tr></thead><tbody>"
+            & _Rows
+        & "</tbody></table>"
+    & "</div>"
+
+
+// ─── E · COMPONENTES REUTILIZABLES ──────────────────────────────────────────
+
+HTML · Skill Badge =
+VAR _Skill     = SELECTEDVALUE ( Dim_Skills[skill], "—" )
+VAR _Categoria = SELECTEDVALUE ( Dim_Skills[categoria], "—" )
+VAR _Premium   = SELECTEDVALUE ( Dim_Skills[es_premium], FALSE )
+VAR _ColorBg =
+    SWITCH (
+        _Categoria,
+        "Lenguajes",       "#00D4FF",
+        "BI",              "#7B2FBE",
+        "Cloud",           "#00E396",
+        "ML/AI",           "#FFB020",
+        "Bases de Datos",  "#FF4D6D",
+        "Big Data",        "#5B8FF9",
+        "Orquestacion",    "#9C7DFF",
+        "DevOps",          "#00B4D8",
+        "Librerias",       "#C77DFF",
+        "#9090A8"
+    )
+VAR _Icono = IF ( _Premium, " ⭐", "" )
+RETURN
+    "<span style='display:inline-block;background:" & _ColorBg & "22;border:1px solid " & _ColorBg & ";color:" & _ColorBg & ";padding:4px 12px;border-radius:14px;font-family:Segoe UI,Arial,sans-serif;font-size:12px;font-weight:600;'>"
+    & _Skill & _Icono
+    & "</span>"
+
+
+HTML · Trend Indicator MoM =
+VAR _Var = [Var MoM Ofertas]
+VAR _Color = SWITCH (
+    TRUE (),
+    _Var >  0.05, "#00E396",
+    _Var < -0.05, "#FF4D6D",
+    "#FFB020"
+)
+VAR _Icono = SWITCH (
+    TRUE (),
+    _Var >  0.05, "▲",
+    _Var < -0.05, "▼",
+    "▬"
+)
+RETURN
+    IF (
+        ISBLANK ( _Var ),
+        "<span style='color:#9090A8;font-family:Segoe UI;'>—</span>",
+        "<span style='color:" & _Color & ";font-weight:600;font-size:14px;font-family:Segoe UI,Arial,sans-serif;'>"
+        & _Icono & " " & FORMAT ( _Var, "0.0%" )
+        & "</span>"
+    )

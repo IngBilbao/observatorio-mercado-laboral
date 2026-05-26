@@ -17,6 +17,10 @@ let
     SinSkills       = Table.RemoveColumns(Promovido, ColumnasAQuitar),
 
     // Tipos
+    // CRITICO: el ultimo parametro "en-US" fuerza el parsing del PUNTO como
+    // separador decimal. Sin esto, en una instancia de Power BI con locale
+    // espanol, las latitudes/longitudes/salarios se interpretan incorrectamente
+    // (el . se trata como separador de miles → 37.7749 se lee como 377749).
     Tipos           = Table.TransformColumnTypes(SinSkills, {
                         {"oferta_id",          type text},
                         {"fecha_publicacion",  type date},
@@ -40,7 +44,7 @@ let
                         {"anio",               Int64.Type},
                         {"mes",                Int64.Type},
                         {"anio_mes",           type text}
-                      }),
+                      }, "en-US"),
 
     // Columnas calculadas utiles
     SalarioMiles    = Table.AddColumn(Tipos, "salario_miles_usd", each [salario_anual_usd] / 1000, type number),

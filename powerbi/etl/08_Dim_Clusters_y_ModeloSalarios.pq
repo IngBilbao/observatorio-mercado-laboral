@@ -25,7 +25,7 @@ let
                     {"salario_mediano_usd",   type number},
                     {"anios_exp_promedio",    type number},
                     {"top_skills",            type text}
-                  })
+                  }, "en-US")
 in
     Tipos
 
@@ -50,7 +50,7 @@ let
                     {"salario_predicho_usd",  type number},
                     {"residuo_usd",           type number},
                     {"residuo_pct",           type number}
-                  }),
+                  }, "en-US"),
     // Solo mantener lo nuevo (lo demas ya esta en Fact_Ofertas)
     Limpio      = Table.SelectColumns(Tipos, {"oferta_id", "salario_predicho_usd", "residuo_usd", "residuo_pct"})
 in
@@ -72,7 +72,7 @@ let
                     {"feature",     type text},
                     {"coef_log",    type number},
                     {"impacto_pct", type number}
-                  }),
+                  }, "en-US"),
     // Categoria del feature para colorear/agrupar
     ConCategoria= Table.AddColumn(Tipos, "categoria_feature", each
         if Text.StartsWith([feature], "skill_") then "Skill"
