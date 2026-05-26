@@ -30,61 +30,65 @@ Los datos existen — Stack Overflow Survey, Adzuna, Kaggle DS Salaries — pero
 
 ## 🏗️ Arquitectura
 
+El sistema adopta un patrón **event-driven** con **3 capas desacopladas**, cada una operando en su horizonte temporal propio:
+
 ```mermaid
-flowchart LR
-    subgraph fuentes ["📥 Fuentes de datos"]
-        SINT[Datos sintéticos<br/>5K ofertas calibradas]
-        ADZ[Adzuna API<br/>Ofertas reales]
-        KAG[Kaggle datasets<br/>SO Survey · DS Salaries]
+flowchart TB
+    subgraph capa1 ["⏰ CAPA 1 · DATOS  (cuasi-real-time, cada 6h)"]
+        TS[Task Scheduler<br/>Windows]
+        TS --> ORQ[99_pipeline.py<br/>Orquestador]
+        ORQ --> EXT[01 Extracción]
+        ORQ --> LIM[02 Limpieza]
+        ORQ --> NLP[03 NLP Skills]
+        ORQ --> CLU[04 K-means]
+        ORQ --> TIM[05 Prophet]
+        ORQ --> REG[06 Regresión]
+        ORQ --> VER[07 Verificación]
+        ORQ --> ALE[08 Alertas MoM]
+        ORQ --> ADZ[09 Adzuna API]
     end
 
-    subgraph python ["🐍 Pipeline Python"]
-        EXT[01 · Extracción]
-        LIM[02 · Limpieza]
-        NLP[03 · NLP Skills<br/>spaCy + regex]
-        CLU[04 · Clustering<br/>K-means + PCA]
-        TIM[05 · Prophet<br/>Forecast 12m]
-        REG[06 · Regresión<br/>Salario USD]
-        VER[07 · Verificación]
-        ALE[08 · Alertas MoM]
+    subgraph fuentes ["📥 Fuentes externas"]
+        ADZUNA[(Adzuna API)]
+        KAGGLE[(Kaggle datasets)]
     end
 
-    subgraph pbi ["📊 Power BI"]
-        PQ[Power Query<br/>ETL + Star Schema]
-        DAX[Medidas DAX<br/>~35 KPIs]
-        DASH[Dashboard 6 páginas]
+    ADZUNA -.-> ADZ
+    KAGGLE -.-> EXT
+
+    capa1 --> ONEDRIVE[(OneDrive sync<br/>data/outputs/)]
+
+    subgraph capa2 ["⚡ CAPA 2 · NOTIFICACIONES  (real-time, < 1 min)"]
+        FLOW1[Flujo 1 · Reporte Semanal<br/>Lunes 8:00 AM]
+        FLOW2[Flujo 2 · Alertas Skills<br/>trigger por archivo]
     end
 
-    subgraph pa ["⚡ Power Automate"]
-        F1[Flujo 1<br/>Reporte semanal]
-        F2[Flujo 2<br/>Alertas skills]
+    ONEDRIVE -- file change --> FLOW2
+    FLOW1 --> EMAIL1[📧 PDF + email<br/>Outlook 365]
+    FLOW2 --> EMAIL2[📧 HTML alertas<br/>Gmail · Hotmail]
+
+    subgraph capa3 ["📊 CAPA 3 · DASHBOARD  (on-demand)"]
+        PBIX[Power BI Desktop<br/>.pbix]
+        PQ[Power Query M<br/>star schema]
+        DAX[~35 medidas DAX]
+        PBIX --> PQ --> DAX
+        DAX --> PUBLISH[Publicar a PBI Service]
+        PUBLISH --> DASH[Dashboard 6 páginas<br/>en cloud]
     end
 
-    subgraph out ["📤 Outputs"]
-        EMAIL[Emails con PDF]
-        ONE[OneDrive logs]
-        ALERTS[Notificaciones]
-    end
-
-    SINT --> EXT
-    ADZ --> EXT
-    KAG --> EXT
-    EXT --> LIM --> NLP --> CLU
-    NLP --> TIM
-    NLP --> REG
-    REG --> VER
-    TIM --> ALE
-    VER --> PQ
-    CLU --> PQ
-    TIM --> PQ
-    REG --> PQ
-    PQ --> DAX --> DASH
-    DASH --> F1
-    ALE --> F2
-    F1 --> EMAIL
-    F1 --> ONE
-    F2 --> ALERTS
+    ONEDRIVE -.-> PQ
+    FLOW1 --> DASH
 ```
+
+**Por qué tres capas separadas:**
+
+| Capa | Latencia | Decisión |
+|---|---|---|
+| Datos | 1-24h configurable | Task Scheduler local invoca el pipeline. Decoupled de la UI. |
+| Notificaciones | < 1 min | Power Automate trigger por evento de archivo. Lo crítico llega rápido. |
+| Dashboard | On-demand | Refresh manual al publicar nuevas versiones. Optimiza capacity y costos. |
+
+Este patrón es **lambda architecture** aplicado al stack Microsoft. Ver [`power_automate/ARQUITECTURA_EVENT_DRIVEN.md`](../power_automate/ARQUITECTURA_EVENT_DRIVEN.md) para el discurso técnico completo.
 
 ---
 
@@ -257,6 +261,8 @@ Una mirada por skill mostrada en este repo:
 4. **Prophet aplica estacionalidad anual incluso con 24 meses de historia** — produce líneas wavy en el forecast. No es un bug, es feature; pero hay que comunicarlo al stakeholder antes de que pregunte "¿por qué sube y baja tanto?".
 
 5. **Para portfolio, README es el "elevator pitch".** Reclutadores miran 30 segundos. Hay que enseñar resultados (gráficos, métricas, badges) antes que arquitectura.
+
+6. **Las restricciones operativas se convierten en decisiones arquitectónicas.** El proyecto enfrentó una limitación real (credenciales del Gateway local no disponibles para configurar refresh automático de Power BI). En lugar de bloquear el avance, se pivoteó a una arquitectura **event-driven** explícitamente desacoplada: Task Scheduler maneja el procesamiento, Power Automate maneja notificaciones, Power BI Service mantiene el dashboard publicado on-demand. El resultado es genuinamente más profesional y defendible que el plan original — alinea con buenas prácticas de FinOps (no refrescar cuando no aporta valor) y de event-driven design. Lección general: las restricciones obligan a explicar las decisiones, y eso fortalece el portfolio.
 
 ---
 

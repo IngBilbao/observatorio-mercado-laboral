@@ -65,45 +65,36 @@ Tendencias detectadas:
 
 ---
 
-## 🏗️ Arquitectura
+## 🏗️ Arquitectura event-driven en 3 capas
 
 ```mermaid
 flowchart LR
-    subgraph fuentes ["📥 Fuentes"]
-        A[Sintéticos]
-        B[Adzuna API]
-        C[Kaggle]
+    subgraph c1 ["⏰ DATOS (cada 6h)"]
+        TS[Task Scheduler] --> PY[Python<br/>Pipeline ML]
     end
-    subgraph pipeline ["🐍 Python ML"]
-        D[ETL + NLP]
-        E[Clustering<br/>K-means]
-        F[Forecast<br/>Prophet]
-        G[Regresión<br/>Salarios]
+    subgraph c2 ["⚡ NOTIFICACIONES (&lt;1 min)"]
+        F1[Flujo 1<br/>Reporte<br/>Semanal]
+        F2[Flujo 2<br/>Alertas<br/>Skills]
     end
-    subgraph bi ["📊 Power BI"]
-        H[Power Query<br/>Star Schema]
-        I[Dashboard<br/>6 páginas]
-    end
-    subgraph auto ["⚡ Power Automate"]
-        J[Reporte<br/>Semanal]
-        K[Alertas<br/>MoM Skills]
+    subgraph c3 ["📊 DASHBOARD (on-demand)"]
+        PBI[Power BI<br/>Service]
     end
 
-    A --> D
-    B --> D
-    C --> D
-    D --> E
-    D --> F
-    D --> G
-    E --> H
-    F --> H
-    G --> H
-    H --> I
-    I --> J
-    G --> K
+    PY --> OD[(OneDrive)]
+    OD --> F2
+    PY -.-> PBI
+    F1 --> MAIL[📧 PDF + Email]
+    F2 --> MAIL
+    PBI --> F1
 ```
 
-> Para detalle visual completo del flujo, ver [**case study**](docs/case_study.md#-arquitectura).
+| Capa | Latencia | Tecnología |
+|---|---|---|
+| 🟢 **Datos** | Cuasi-real-time (cada 6h) | Task Scheduler + Python ML pipeline |
+| 🟢 **Notificaciones** | **Real-time (< 1 min)** | Power Automate event triggers |
+| 🟡 **Dashboard** | On-demand | Power BI Service (refresh manual) |
+
+📖 [**Arquitectura completa →**](power_automate/ARQUITECTURA_EVENT_DRIVEN.md) · [**Case study →**](docs/case_study.md#-arquitectura)
 
 ---
 
@@ -131,8 +122,11 @@ py python/99_pipeline.py
 # 5. (Opcional) Incluir ofertas reales de Adzuna
 py python/99_pipeline.py --con-adzuna --adzuna-paises es gb us mx
 
-# 6. Construir Power BI siguiendo powerbi/README.md
-# 7. Construir flujos Power Automate siguiendo power_automate/README.md
+# 6. (Opcional) Programar el pipeline para que se ejecute cada 6 horas
+.\scripts\programar_pipeline.ps1 -IntervaloHoras 6 -Rapido
+
+# 7. Construir Power BI siguiendo powerbi/README.md
+# 8. Construir flujos Power Automate siguiendo power_automate/README.md
 ```
 
 ---
@@ -167,10 +161,15 @@ observatorio-mercado-laboral/
 │
 ├── ⚡ power_automate/
 │   ├── README.md                  ← índice de flujos
-│   ├── CONFIGURAR_REFRESH.md      ← prereq: Gateway
+│   ├── ARQUITECTURA_EVENT_DRIVEN.md ← diseño en 3 capas
+│   ├── CONFIGURAR_REFRESH.md      ← (opcional) activar auto-refresh
 │   ├── COMO_OBTENER_IDS.md        ← obtener Dataset/Report IDs
 │   ├── flujo_01_reporte_semanal.md
 │   └── flujo_02_alertas_skills.md
+│
+├── 🔧 scripts/
+│   ├── README.md
+│   └── programar_pipeline.ps1     ← Task Scheduler (capa de datos real-time)
 │
 ├── 📦 data/  (gitignored)
 │   ├── raw/                       ← descargas crudas (Adzuna, Kaggle)
