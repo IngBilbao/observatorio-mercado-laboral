@@ -1,19 +1,19 @@
-# 🚨 Flujo 2 — Alertas de Cambio en Skills
+# 🚨 Flujo 2 — Alertas de Cambio en Skills (versión JSON)
 
-> **Objetivo:** cuando el archivo `alertas_skills.csv` se actualiza en OneDrive (lo genera el script Python `08_generar_alertas.py`), el flujo lee las skills críticas y envía un email destacando los cambios significativos.
+> **Objetivo:** cuando el archivo `alertas_skills.json` se actualiza en OneDrive (lo genera el script Python `08_generar_alertas.py`), el flujo lo parsea con la acción nativa de Power Automate y envía un email HTML con la tabla de alertas.
 
 **Trigger:** OneDrive — Cuando se modifica un archivo
 **Destinatarios:** `bilbao990512@gmail.com`, `bilbao990512@hotmail.com`
-**Salida:** 1 email por ejecución, con tabla HTML de skills en alerta
+**Salida:** 1 email por ejecución con tabla HTML estilizada
+
+> **¿Por qué JSON en vez de CSV?** Power Automate parsea JSON nativamente con la acción **"Parse JSON"**. No requiere `split()`, ni manejar `\r\n`, ni `decodeUriComponent()`. **Mucho más confiable** que parsear CSV manualmente.
 
 ---
 
 ## 🔧 Prerequisitos
 
-- [ ] Carpeta `/Bilbao Analytics/Observatorio/outputs/` en OneDrive (donde se sube `alertas_skills.csv`)
-- [ ] Script `python/08_generar_alertas.py` ejecutándose periódicamente (manualmente, vía Tarea Programada de Windows, o vía Desktop Flow)
-
-> 💡 Como `data/outputs/` ya está dentro de tu carpeta OneDrive sincronizada (tu proyecto vive en `OneDrive - Bilbao Analytics`), el archivo automáticamente se sube. Solo necesitas la ruta correcta en OneDrive for Business.
+- [ ] `python/08_generar_alertas.py` ejecutado al menos una vez (genera `alertas_skills.json`)
+- [ ] El archivo está en una carpeta visible para Power Automate (dentro de tu OneDrive sincronizado)
 
 ---
 
@@ -22,133 +22,151 @@
 ### 1. Crear el flujo
 
 1. **https://make.powerautomate.com → Crear → Flujo de nube automatizado**
-2. Nombre: `Observatorio · Alertas de Skills`
-3. Buscar trigger: **"OneDrive for Business — Cuando se modifica un archivo"**
+2. Nombre: `Observatorio · Alertas de Skills (JSON)`
+3. Trigger: **OneDrive for Business — Cuando se modifica un archivo**
 4. Click en **Crear**.
 
 ### 2. Configurar el trigger
 
-| Campo                 | Valor                                                                                                                  |
-|-----------------------|------------------------------------------------------------------------------------------------------------------------|
-| Carpeta               | Navega a la carpeta donde está `alertas_skills.csv` (la ruta dentro de tu OneDrive personal del proyecto)              |
-| Incluir subcarpetas   | No                                                                                                                     |
+| Campo | Valor |
+|---|---|
+| Carpeta | Navega a `.../observatorio-mercado-laboral/data/outputs` dentro de tu OneDrive |
+| Incluir subcarpetas | No |
 
-> ⚠️ La ruta en OneDrive depende de cómo aparezca el folder del proyecto en tu OneDrive. Algo como:
-> `/Bilbao Analitycs/Proyectos/Proyecto analista de datos/observatorio-mercado-laboral/data/outputs/`
-
-### 3. Paso — Condición: solo procesar `alertas_skills.csv`
+### 3. Condición — solo procesar `alertas_skills.json`
 
 **Acción → Condición (Control):**
-- `Nombre del archivo` `es igual a` `alertas_skills.csv`
+- Lado izquierdo: `Nombre del archivo con extensión` (dynamic content del trigger)
+- Operador: `es igual a`
+- Lado derecho: `alertas_skills.json`
 
-Si **NO**: terminar. Si **SÍ**: continuar.
+Si **NO** → terminar el flujo.
+Si **SÍ** → continuar.
 
-### 4. Paso — Obtener el contenido del archivo
+### 4. Obtener contenido del archivo
 
-**OneDrive for Business → "Obtener contenido del archivo":**
-- Archivo: `Identificador` del trigger
+**OneDrive for Business → "Obtener contenido del archivo"**
+- Archivo: `Identificador` del trigger (dynamic content)
 
-### 5. Paso — Parsear el CSV
+### 5. **Parse JSON** — aquí está la magia ✨
 
-Power Automate no tiene parser CSV nativo, pero hay dos opciones:
+**Acción → "Análisis JSON" / "Parse JSON"** (categoría Data Operations):
 
-#### Opción A (más simple) — Acción "Crear tabla CSV"
-> No existe nativa. Se usa el truco de leer como texto y splitear.
+- **Contenido:** `Cuerpo` de la acción "Obtener contenido del archivo" (dynamic content)
+- **Esquema:** copia y pega exactamente esto:
 
-#### Opción B (recomendada) — Usar `Office Scripts` o función `split()`
+```json
+{
+  "type": "object",
+  "properties": {
+    "generated_at": { "type": "string" },
+    "umbral_pct": { "type": "number" },
+    "total_alertas": { "type": "integer" },
+    "alertas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "skill": { "type": "string" },
+          "mes_actual": { "type": "string" },
+          "mes_anterior": { "type": "string" },
+          "ofertas_mes_actual": { "type": "integer" },
+          "ofertas_mes_anterior": { "type": "integer" },
+          "variacion_pct": { "type": "number" },
+          "direccion": { "type": "string" },
+          "severidad": { "type": "string" },
+          "mensaje": { "type": "string" }
+        },
+        "required": ["skill", "variacion_pct", "direccion", "severidad", "mensaje"]
+      }
+    }
+  }
+}
+```
 
-**Inicializar variable** `Filas`:
-- Tipo: Matriz
+> 💡 **Tip:** si tienes dudas con el esquema, en lugar de pegar el JSON arriba puedes hacer clic en **"Generar a partir de muestra"** y pegar el contenido completo de `alertas_skills.json` — Power Automate genera el esquema automáticamente.
+
+### 6. Condición — solo continuar si hay alertas
+
+**Acción → Condición:**
+- Lado izquierdo: `total_alertas` (dynamic content del Parse JSON)
+- Operador: `es mayor que`
+- Lado derecho: `0` (escribir como número, no como texto)
+
+Si **NO** → terminar (sin spam de emails vacíos).
+Si **SÍ** → continuar dentro de la rama True.
+
+### 7. Construir tabla HTML iterando las alertas
+
+**Acción → "Inicializar variable":**
+- Nombre: `TablaHTML`
+- Tipo: `Cadena`
 - Valor:
-  ```
-  skip(split(decodeBase64(body('Obtener_contenido_del_archivo')['$content']), '\r\n'), 1)
-  ```
-
-> 💡 `skip(..., 1)` salta la cabecera. Si el CSV usa `\n` solo (Linux line endings), cambiar a `'\n'`.
-
-### 6. Paso — Iterar las filas y enviar 1 email consolidado
-
-**Inicializar variable** `TablaHTML`:
-- Tipo: Cadena
-- Valor:
-  ```
-  <table style="border-collapse:collapse; width:100%;">
+  ```html
+  <table style="border-collapse:collapse;width:100%;font-family:Segoe UI,Arial,sans-serif;">
     <thead>
-      <tr style="background-color:#1A1A2E; color:#00D4FF;">
-        <th style="padding:8px; text-align:left;">Skill</th>
-        <th style="padding:8px;">Dirección</th>
-        <th style="padding:8px;">Variación</th>
-        <th style="padding:8px;">Severidad</th>
+      <tr style="background-color:#1A1A2E;color:#00D4FF;">
+        <th style="padding:8px;text-align:left;border-bottom:1px solid #7B2FBE;">Skill</th>
+        <th style="padding:8px;border-bottom:1px solid #7B2FBE;">Dirección</th>
+        <th style="padding:8px;text-align:right;border-bottom:1px solid #7B2FBE;">Variación</th>
+        <th style="padding:8px;border-bottom:1px solid #7B2FBE;">Severidad</th>
       </tr>
     </thead>
     <tbody>
   ```
 
-**Acción → Aplicar a cada (Apply to each):**
-- Entrada: `variables('Filas')`
-- Dentro:
-  - **Condición:** la fila no está vacía → `length(items('Apply_to_each'))` `mayor que` `0`
-  - **Inicializar variables temporales** (en cada iteración usar `Componer` para sacar campos):
+**Acción → "Aplicar a cada" (Apply to each):**
+- Entrada: `alertas` (dynamic content del Parse JSON)
 
-    Crear acción **Componer** para `Campos`:
-    ```
-    split(items('Apply_to_each'), ',')
-    ```
+Dentro del Apply to each:
 
-    Luego acceder con `outputs('Componer')?[index]`:
-    - skill            → `outputs('Componer')?[0]`
-    - mes_actual       → `outputs('Componer')?[1]`
-    - mes_anterior     → `outputs('Componer')?[2]`
-    - ofertas_act      → `outputs('Componer')?[3]`
-    - ofertas_ant      → `outputs('Componer')?[4]`
-    - variacion_pct    → `outputs('Componer')?[5]`
-    - direccion        → `outputs('Componer')?[6]`
-    - severidad        → `outputs('Componer')?[7]`
-    - mensaje          → `outputs('Componer')?[8]`
+**Acción → "Anexar a la variable de cadena" (Append to string variable):**
+- Nombre: `TablaHTML`
+- Valor (en modo Expresión Avanzada cuando haga falta combinar):
+  ```html
+  <tr>
+    <td style="padding:6px;border-bottom:1px solid #2A2A45;">@{items('Apply_to_each')?['skill']}</td>
+    <td style="padding:6px;border-bottom:1px solid #2A2A45;color:@{if(equals(items('Apply_to_each')?['direccion'],'ALZA'),'#00E396','#FF4D6D')};">@{items('Apply_to_each')?['direccion']}</td>
+    <td style="padding:6px;border-bottom:1px solid #2A2A45;text-align:right;">@{formatNumber(items('Apply_to_each')?['variacion_pct'],'0.0')}%</td>
+    <td style="padding:6px;border-bottom:1px solid #2A2A45;font-weight:bold;">@{items('Apply_to_each')?['severidad']}</td>
+  </tr>
+  ```
 
-  - **Anexar a variable de cadena** `TablaHTML`:
-    ```
-    <tr>
-      <td style="padding:6px; border-bottom:1px solid #7B2FBE;">@{outputs('Componer')?[0]}</td>
-      <td style="padding:6px; border-bottom:1px solid #7B2FBE; color:@{if(equals(outputs('Componer')?[6], 'ALZA'), '#00E396', '#FF4D6D')};">@{outputs('Componer')?[6]}</td>
-      <td style="padding:6px; border-bottom:1px solid #7B2FBE;">@{outputs('Componer')?[5]}%</td>
-      <td style="padding:6px; border-bottom:1px solid #7B2FBE; font-weight:bold;">@{outputs('Componer')?[7]}</td>
-    </tr>
-    ```
+> 💡 Nota cómo accedo a los campos: `items('Apply_to_each')?['skill']` — el `?` evita errores si el campo está vacío. Esto es **mucho más limpio** que `outputs('Componer')?[index]` que tenías antes.
 
 **Después del Apply to each:**
 
-**Anexar a variable de cadena** `TablaHTML`:
-```
+**Acción → "Anexar a la variable de cadena":**
+- Nombre: `TablaHTML`
+- Valor:
+  ```html
     </tbody>
   </table>
-```
+  ```
 
-### 7. Paso — Enviar email solo si hay alertas
+### 8. Enviar email
 
-**Condición:** `length(variables('Filas'))` `mayor que` `0`
+**Office 365 Outlook → "Enviar un correo electrónico (V2)":**
 
-Si **SÍ**:
-
-**Outlook → Enviar correo (V2):**
-
-| Campo   | Valor                                                                                  |
-|---------|----------------------------------------------------------------------------------------|
-| Para    | `bilbao990512@gmail.com;bilbao990512@hotmail.com`                                       |
-| Asunto  | `🚨 Observatorio — @{length(variables('Filas'))} skills en alerta`                       |
-| Cuerpo  | (ver HTML completo abajo)                                                              |
+| Campo | Valor |
+|---|---|
+| Para | `bilbao990512@gmail.com;bilbao990512@hotmail.com` |
+| Asunto | `🚨 Observatorio — @{triggerOutputs()?['body/Name']} con @{outputs('Analizar_JSON')?['body/total_alertas']} alertas activas` |
+| Cuerpo | (HTML abajo — activar modo `</>`) |
 
 #### Cuerpo HTML del email
 
 ```html
-<div style="font-family: 'Segoe UI', Arial, sans-serif; background-color:#0D0D1A; color:#E8E8F0; padding:24px; max-width:720px; border-radius:8px;">
-  <h2 style="color:#FF4D6D; margin-top:0;">🚨 Alerta del Observatorio</h2>
-  <p style="color:#9090A8;">Detectados cambios significativos (±30% MoM) en la demanda de skills.</p>
-  <hr style="border:0; border-top:1px solid #7B2FBE; margin:16px 0;">
+<div style="font-family:'Segoe UI',Arial,sans-serif;background-color:#0D0D1A;color:#E8E8F0;padding:24px;max-width:720px;border-radius:8px;">
+  <h2 style="color:#FF4D6D;margin-top:0;">🚨 Alerta del Observatorio</h2>
+  <p style="color:#9090A8;">
+    Detectados <b>@{outputs('Analizar_JSON')?['body/total_alertas']}</b> cambios significativos (umbral ±@{outputs('Analizar_JSON')?['body/umbral_pct']}% MoM) en la demanda de skills.
+  </p>
+  <hr style="border:0;border-top:1px solid #7B2FBE;margin:16px 0;">
 
   @{variables('TablaHTML')}
 
-  <p style="margin-top:24px; color:#9090A8; font-size:13px;">
+  <p style="margin-top:24px;color:#9090A8;font-size:13px;">
     Severidad: <strong style="color:#FF4D6D;">CRITICA</strong> (>60%) ·
     <strong style="color:#FFB020;">ALTA</strong> (45-60%) ·
     <strong style="color:#9090A8;">MEDIA</strong> (30-45%)
@@ -156,30 +174,19 @@ Si **SÍ**:
 
   <p style="margin-top:24px;">
     <a href="https://app.powerbi.com/groups/d287f4ea-8862-4da2-8291-ba4168afd518"
-       style="background-color:#00D4FF; color:#0D0D1A; padding:10px 20px; text-decoration:none; border-radius:6px; font-weight:bold;">
+       style="background-color:#00D4FF;color:#0D0D1A;padding:10px 20px;text-decoration:none;border-radius:6px;font-weight:bold;">
       Ver detalle en Power BI →
     </a>
   </p>
 
-  <p style="color:#9090A8; font-size:12px; margin-top:32px;">
-    Generado automáticamente el @{formatDateTime(utcNow(),'dd/MM/yyyy HH:mm')} UTC.<br>
-    Bilbao Analytics · Observatorio Mercado Laboral
+  <p style="color:#9090A8;font-size:12px;margin-top:32px;">
+    Generado automáticamente · @{outputs('Analizar_JSON')?['body/generated_at']} <br>
+    Bilbao Analytics · <a href="https://github.com/IngBilbao/observatorio-mercado-laboral" style="color:#00D4FF;">repositorio en GitHub</a>
   </p>
 </div>
 ```
 
-Si **NO** (cero alertas): no hacer nada. El flujo termina silencioso.
-
----
-
-## 🧪 Probar el flujo
-
-1. Asegúrate de que `alertas_skills.csv` existe en la carpeta correcta de OneDrive (ya lo generamos: 8 alertas detectadas).
-2. **Guardar** el flujo.
-3. Trigger manual: edita ligeramente el CSV (abrir y guardar) → el trigger debería dispararse en ~1 minuto.
-4. Verifica que llegue el email con la tabla.
-
-> ⚠️ El trigger de OneDrive puede tardar **hasta 1 minuto** en detectar el cambio — es asíncrono por diseño.
+> ⚠️ Si el nombre exacto de tu acción Parse JSON es "Analizar JSON" en español, las expresiones usan `outputs('Analizar_JSON')`. Si es "Parse_JSON", ajusta. **El truco**: en lugar de escribir la expresión, usa el botón **"Agregar contenido dinámico"** que muestra los campos con clic — evita typos.
 
 ---
 
@@ -189,30 +196,30 @@ Si **NO** (cero alertas): no hacer nada. El flujo termina silencioso.
 Trigger: Archivo modificado en /outputs/
     │
     ▼
-¿Nombre = alertas_skills.csv?
+¿Nombre = alertas_skills.json?
     │ NO → FIN
     │ SÍ ↓
 Obtener contenido del archivo
     │
     ▼
-Parsear CSV → variable Filas
+Analizar JSON (Parse JSON)  ← AQUÍ ESTÁ LA MAGIA
     │
     ▼
-Inicializar TablaHTML con cabecera
-    │
-    ▼
-┌── Aplicar a cada (fila) ────────────┐
-│   Componer Campos = split(fila,',')  │
-│   Anexar fila HTML a TablaHTML        │
-└──────────────────────────────────────┘
-    │
-    ▼
-Cerrar TablaHTML
-    │
-    ▼
-¿Hay filas?
+¿total_alertas > 0?
     │ NO → FIN silencioso
     │ SÍ ↓
+Inicializar TablaHTML (con cabecera)
+    │
+    ▼
+┌── Aplicar a cada (alertas) ────────────┐
+│   Anexar fila HTML a TablaHTML          │
+│   (acceso directo: items()?['skill'])   │
+└─────────────────────────────────────────┘
+    │
+    ▼
+Anexar cierre de tabla a TablaHTML
+    │
+    ▼
 Enviar email con TablaHTML
     │
     ▼
@@ -221,9 +228,35 @@ FIN
 
 ---
 
-## 🚀 Mejoras futuras (v2)
+## 🧪 Probar el flujo
 
-- [ ] Agrupar por severidad y enviar email separado por severidad CRITICA.
-- [ ] Enviar también notificación push a Teams del workspace de Bilbao Analytics.
-- [ ] Llamar a una API de noticias para enriquecer el email con artículos relacionados con la skill (ej. "Snowflake +60%: artículos recientes").
-- [ ] Si la skill `Python` cae >30% — eso es probablemente un error del pipeline, no del mercado. Filtrar skills "fundamentales" (Python, SQL, Excel) para excluirlas del trigger normal.
+1. Asegúrate de que `alertas_skills.json` existe en OneDrive (ejecuta `py python/08_generar_alertas.py` localmente).
+2. **Guardar** el flujo.
+3. Ejecuta el script otra vez (o edita y guarda el JSON manualmente) → el trigger se dispara en ~1 minuto.
+4. Verifica que llegue el email con la tabla HTML correcta.
+
+> 💡 **Trigger de prueba manual:** desde la página del flujo, click en **Probar → Manualmente** → modifica el archivo en OneDrive → debería dispararse.
+
+---
+
+## 🆚 Comparativa: JSON vs CSV
+
+| Aspecto | JSON (esta guía) | CSV (versión anterior) |
+|---|---|---|
+| Parsing | Nativo (`Parse JSON`) | Manual (`split`, `decodeUriComponent`) |
+| Acceso a campos | `items()?['skill']` | `outputs('Componer')?[0]` |
+| Tipos de dato | Preservados (int, float, string) | Todos string → requiere `float()` |
+| Manejo de `\r\n` | No aplica | Crítico, fuente de bugs |
+| Reordenar columnas | No afecta | Romper índices |
+| Errores típicos | Raros | "String/Integer don't match" |
+
+**Resultado:** menos código, más robusto, más fácil de mantener.
+
+---
+
+## 🚀 Mejoras futuras
+
+- [ ] Filtrar alertas por severidad: una acción `Filter array` antes del Apply to each para enviar solo CRITICA.
+- [ ] Agrupar alertas por categoría de skill (Cloud, ML/AI, BI...) y enviar 1 email por categoría.
+- [ ] Notificación push a Teams en lugar de email para alertas CRITICAS.
+- [ ] Adjuntar el CSV original al email para análisis manual.

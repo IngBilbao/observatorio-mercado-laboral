@@ -2,16 +2,21 @@
 08_generar_alertas.py
 =====================
 Detecta variaciones MoM (mes contra mes) significativas en la demanda de
-skills y emite un CSV con SOLO las skills que superan el umbral.
+skills y emite los archivos que consume el Flujo 2 de Power Automate.
 
-Este es el insumo que el Flujo 2 de Power Automate (Alertas de Skills)
-consume: cuando este CSV se actualiza en OneDrive, el flujo dispara
-emails con las skills que pasaron el umbral.
+Salidas:
+- data/outputs/alertas_skills.csv  (formato CSV legacy)
+- data/outputs/alertas_skills.json (formato preferido para Power Automate)
+
+Power Automate parsea el JSON nativamente con la accion "Parse JSON" —
+mucho mas confiable que parsear CSV con split() y escape de caracteres.
 
 Entrada:  data/outputs/skills_serie_historica.csv
-Salida:   data/outputs/alertas_skills.csv
 """
 from __future__ import annotations
+
+import json
+from datetime import datetime
 
 import pandas as pd
 
@@ -87,6 +92,21 @@ def main() -> None:
             log.info(f"   • [{r['severidad']:>7s}] {r['mensaje']}")
 
     save_csv(alertas, PATHS.outputs / "alertas_skills.csv")
+
+    # Tambien exportar JSON para que Power Automate lo parsee con "Parse JSON"
+    # sin necesidad de split() manual ni manejo de \r\n.
+    payload = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "umbral_pct": UMBRAL_PCT,
+        "total_alertas": int(len(alertas)),
+        "alertas": alertas.to_dict(orient="records"),
+    }
+    json_path = PATHS.outputs / "alertas_skills.json"
+    json_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+        encoding="utf-8",
+    )
+    log.info(f"✅ {json_path.relative_to(PATHS.root)}  ({len(alertas)} alertas)")
 
 
 if __name__ == "__main__":
